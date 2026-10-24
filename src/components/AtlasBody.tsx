@@ -6,10 +6,16 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 import { EMBEDDED_LOD0 } from '@/atlas/embedded';
 import { atlasUrl, type AtlasFile } from '@/atlas/files';
+import {
+  ATLAS_ORDER as ORDER,
+  partLabel,
+  regionOf,
+  selectedLayers,
+  showDetail,
+  showRegionChunk,
+  type AtlasLayer,
+} from '@/atlas/body-model';
 import type { Layer } from '@/lib/types';
-
-const ORDER = ['skin', 'muscle', 'organ', 'bone'] as const;
-type AtlasLayer = (typeof ORDER)[number];
 
 const COLOR: Record<AtlasLayer, string> = {
   skin: '#E0B494',
@@ -74,64 +80,10 @@ function decodeBase64(input: string): ArrayBuffer {
   return out.buffer;
 }
 
-function selectedLayers(layer: Layer): AtlasLayer[] {
-  if (layer === 'skin') return ['skin'];
-  if (layer === 'bones') return ['bone'];
-  return ['muscle', 'organ'];
-}
-
 type Pose = { zoom: number; turn: number; scroll: number; slide: number; layers: AtlasLayer[] };
 
 type MeshEntry = { layer: AtlasLayer; region: string; object: THREE.Object3D };
 type DetailEntry = { layer: AtlasLayer; region: string; root: THREE.Object3D };
-
-const REGION_LABELS: Record<string, string> = {
-  head: 'Head',
-  torso: 'Torso',
-  'arm-left': 'Left arm',
-  'arm-right': 'Right arm',
-  'leg-left': 'Left leg',
-  'leg-right': 'Right leg',
-};
-
-function regionOf(object: THREE.Object3D): string {
-  let current: THREE.Object3D | null = object;
-  while (current) {
-    const direct = current.userData.atlas_region;
-    if (typeof direct === 'string' && direct) return direct;
-    const raw = String(current.name || current.userData.name || '');
-    const match = raw.match(/(?:skin|muscle|organ|bone)::(.+)$/);
-    if (match?.[1]) return match[1];
-    current = current.parent;
-  }
-  return 'body';
-}
-
-/** Far meshes are one piece per region. Their anatomy name is only a sample, not the whole shape. */
-function partLabel(object: THREE.Object3D): string {
-  let current: THREE.Object3D | null = object;
-  while (current) {
-    if (current.userData.regionChunk) {
-      const region = regionOf(current);
-      return REGION_LABELS[region] ?? region;
-    }
-    const anatomy = current.userData.anatomy;
-    if (typeof anatomy === 'string' && anatomy) return prettyAnatomy(anatomy);
-    current = current.parent;
-  }
-  const region = regionOf(object);
-  return REGION_LABELS[region] ?? 'Body';
-}
-
-function prettyAnatomy(anatomy: string): string {
-  const side = anatomy.match(/\.(l|r)$/i);
-  const base = anatomy
-    .replace(/\.(l|r|ol|or|el|er)$/i, '')
-    .replace(/[()]/g, '')
-    .trim();
-  if (!side) return base;
-  return `${base} · ${side[1].toLowerCase() === 'l' ? 'Left' : 'Right'}`;
-}
 
 function isShown(object: THREE.Object3D): boolean {
   let current: THREE.Object3D | null = object;
@@ -347,15 +299,18 @@ export function AtlasBody({
 
     const apply = () => {
       const visible = new Set(pose.current.layers);
-      const close = pose.current.zoom >= 1.2;
-      const covered = (layer: AtlasLayer, region: string) =>
-        close && detail.some((item) => item.layer === layer && item.region === region);
+      const covered = (atlasLayer: AtlasLayer, region: string) =>
+        detail.some((item) => item.layer === atlasLayer && item.region === region);
       for (const entry of entries) {
-        entry.object.visible = visible.has(entry.layer) && !covered(entry.layer, entry.region);
+        entry.object.visible = showRegionChunk(
+          pose.current.zoom,
+          visible.has(entry.layer),
+          covered(entry.layer, entry.region),
+        );
         if (entry.object.visible) paint(entry.object, entry.layer, visible);
       }
       for (const item of detail) {
-        item.root.visible = close && visible.has(item.layer);
+        item.root.visible = showDetail(pose.current.zoom, visible.has(item.layer));
         if (item.root.visible) paint(item.root, item.layer, visible);
       }
     };

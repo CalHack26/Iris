@@ -118,11 +118,6 @@ export function AnatomyCanvas({
     null,
   );
   const lockPageScroll = useLockPageScroll();
-  const fingers = useRef(0);
-  const holdPage = (down: boolean) => {
-    fingers.current = Math.max(0, fingers.current + (down ? 1 : -1));
-    lockPageScroll(fingers.current > 0);
-  };
 
   const img = IMAGES[image];
   const box = width ? (imageBox?.(width, height) ?? { left: 0, top: 0, width, height }) : null;
@@ -140,6 +135,9 @@ export function AnatomyCanvas({
   };
 
   const tap = useTapGesture({
+    onTouchesDown: () => lockPageScroll(true),
+    onTouchesUp: (e) => lockPageScroll(e.allTouches.length > e.changedTouches.length),
+    onTouchesCancel: () => lockPageScroll(false),
     runOnJS: true,
     enabled: mode === 'mark',
     onActivate: (e) => {
@@ -157,6 +155,9 @@ export function AnatomyCanvas({
   });
 
   const drawPan = usePanGesture({
+    onTouchesDown: () => lockPageScroll(true),
+    onTouchesUp: (e) => lockPageScroll(e.allTouches.length > e.changedTouches.length),
+    onTouchesCancel: () => lockPageScroll(false),
     runOnJS: true,
     enabled: mode === 'draw',
     maxPointers: 1,
@@ -180,6 +181,9 @@ export function AnatomyCanvas({
   });
 
   const scrollPan = usePanGesture({
+    onTouchesDown: () => lockPageScroll(true),
+    onTouchesUp: (e) => lockPageScroll(e.allTouches.length > e.changedTouches.length),
+    onTouchesCancel: () => lockPageScroll(false),
     runOnJS: true,
     enabled: mode !== 'draw' && mode !== 'view',
     minPointers: 1,
@@ -198,6 +202,9 @@ export function AnatomyCanvas({
   });
 
   const turnPan = usePanGesture({
+    onTouchesDown: () => lockPageScroll(true),
+    onTouchesUp: (e) => lockPageScroll(e.allTouches.length > e.changedTouches.length),
+    onTouchesCancel: () => lockPageScroll(false),
     runOnJS: true,
     enabled: mode !== 'view',
     minPointers: 2,
@@ -215,6 +222,9 @@ export function AnatomyCanvas({
   const pinchTurn = useRef(0);
   const pinchTwist = useRef(0);
   const pinch = usePinchGesture({
+    onTouchesDown: () => lockPageScroll(true),
+    onTouchesUp: (e) => lockPageScroll(e.allTouches.length > e.changedTouches.length),
+    onTouchesCancel: () => lockPageScroll(false),
     runOnJS: true,
     enabled: mode !== 'view',
     onActivate: (e) => {
@@ -242,10 +252,7 @@ export function AnatomyCanvas({
   return (
     <View
       style={[styles.frame, { height, backgroundColor: background, borderRadius: radius }, style]}
-      onLayout={onLayout}
-      onTouchStart={() => holdPage(true)}
-      onTouchEnd={() => holdPage(false)}
-      onTouchCancel={() => holdPage(false)}>
+      onLayout={onLayout}>
       {modelFailed ? null : (
         <AtlasBody
           zoom={zoom}
