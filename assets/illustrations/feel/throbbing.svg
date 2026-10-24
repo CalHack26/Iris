@@ -1,0 +1,8 @@
+<svg preserveAspectRatio="none" overflow="visible" width="46" height="42" viewBox="0 0 46 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Feeling illustration">
+<ellipse id="Soft illustration ground" cx="23" cy="35" rx="17" ry="3" fill="#F2D9CD"/>
+<path id="Pulsing heart" d="M23.0029 33C17.0036 29.0002 8.00445 22.0005 10.0043 15.0009C12.0041 8.0012 20.0032 9.00115 23.0029 14.0009C27.0025 8.0012 35.0017 9.00115 37.0015 15.0009C40.0012 23.0005 29.0023 31.0001 23.0029 33Z" fill="#E6B5A8"/>
+<path id="Pulse" d="M10 23H17L20 18L24 28L28 22H36" stroke-width="1.8" stroke-linecap="round" stroke="#D88F7D"/>
+<path id="Pulse waves" d="M5 15C2.33333 19.6667 2.33333 24.3333 5 29M42 14C45.3333 19.3333 45.3333 24.6667 42 30" stroke-width="1.6" stroke-linecap="round" stroke="#365E62"/>
+</g>
+</svg>
