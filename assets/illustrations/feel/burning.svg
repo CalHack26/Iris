@@ -1,0 +1,7 @@
+<svg preserveAspectRatio="none" overflow="visible" width="46" height="42" viewBox="0 0 46 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Feeling illustration">
+<ellipse id="Soft illustration ground" cx="23" cy="35" rx="17" ry="3" fill="#F2D9CD"/>
+<path id="Flame" d="M23.0005 3C25.0005 12.9986 37.001 13.9985 36.0009 24.9969C35.0009 35.9954 10 38.995 10 23.9971C10 17.9979 15.0002 12.9986 17.0002 9.99903C17.0002 17.9979 20.0004 16.9981 23.0005 3Z" fill="#D88F7D"/>
+<path id="Warm flame center" d="M22.998 18C21.9979 23.9996 28.9989 25.9994 26.9986 30.9991C23.9981 36.9987 14.9968 30.9991 16.9971 25.9994C17.9973 22.9997 20.9977 20.9998 22.998 18Z" fill="#F5D6B3"/>
+</g>
+</svg>

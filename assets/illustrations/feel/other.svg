@@ -1,0 +1,9 @@
+<svg preserveAspectRatio="none" overflow="visible" width="46" height="42" viewBox="0 0 46 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Feeling illustration">
+<ellipse id="Soft illustration ground" cx="23" cy="35" rx="17" ry="3" fill="#F2D9CD"/>
+<path id="Thought bubble" d="M8 12C8 8.66667 10.3333 7 15 7H32C36.6667 7 39 9.33333 39 14V25C39 29 36.6667 31 32 31H19L11 37L12 30C9.33333 29.3333 8 27.3333 8 24V12Z" fill="#F2D9CD"/>
+<circle id="Your words" cx="16.5" cy="18.5" r="1.5" fill="#365E62"/>
+<circle id="Your words_2" cx="24.5" cy="18.5" r="1.5" fill="#365E62"/>
+<circle id="Your words_3" cx="32.5" cy="18.5" r="1.5" fill="#365E62"/>
+</g>
+</svg>
