@@ -1,5 +1,5 @@
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { StyleSheet } from 'react-native';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -25,13 +25,30 @@ const LOD0: Record<AtlasLayer, AtlasFile> = {
   bone: 'lod0-bone.glb',
 };
 
-/** Closer mesh for the middle of the body. Arms and the right leg have no organ detail. */
-const TORSO_DETAIL: Partial<Record<AtlasLayer, AtlasFile>> = {
-  skin: 'lod1-torso-skin.glb',
-  muscle: 'lod1-torso-muscle.glb',
-  organ: 'lod1-torso-organ.glb',
-  bone: 'lod1-torso-bone.glb',
-};
+/** Closer meshes. Each one is a single structure, so a tap can light the humerus without the rest of the arm. */
+const DETAIL: { layer: AtlasLayer; region: string; file: AtlasFile }[] = [
+  { layer: 'skin', region: 'head', file: 'lod1-head-skin.glb' },
+  { layer: 'muscle', region: 'head', file: 'lod1-head-muscle.glb' },
+  { layer: 'organ', region: 'head', file: 'lod1-head-organ.glb' },
+  { layer: 'bone', region: 'head', file: 'lod1-head-bone.glb' },
+  { layer: 'skin', region: 'torso', file: 'lod1-torso-skin.glb' },
+  { layer: 'muscle', region: 'torso', file: 'lod1-torso-muscle.glb' },
+  { layer: 'organ', region: 'torso', file: 'lod1-torso-organ.glb' },
+  { layer: 'bone', region: 'torso', file: 'lod1-torso-bone.glb' },
+  { layer: 'skin', region: 'arm-left', file: 'lod1-arm-left-skin.glb' },
+  { layer: 'muscle', region: 'arm-left', file: 'lod1-arm-left-muscle.glb' },
+  { layer: 'bone', region: 'arm-left', file: 'lod1-arm-left-bone.glb' },
+  { layer: 'skin', region: 'arm-right', file: 'lod1-arm-right-skin.glb' },
+  { layer: 'muscle', region: 'arm-right', file: 'lod1-arm-right-muscle.glb' },
+  { layer: 'bone', region: 'arm-right', file: 'lod1-arm-right-bone.glb' },
+  { layer: 'skin', region: 'leg-left', file: 'lod1-leg-left-skin.glb' },
+  { layer: 'muscle', region: 'leg-left', file: 'lod1-leg-left-muscle.glb' },
+  { layer: 'organ', region: 'leg-left', file: 'lod1-leg-left-organ.glb' },
+  { layer: 'bone', region: 'leg-left', file: 'lod1-leg-left-bone.glb' },
+  { layer: 'skin', region: 'leg-right', file: 'lod1-leg-right-skin.glb' },
+  { layer: 'muscle', region: 'leg-right', file: 'lod1-leg-right-muscle.glb' },
+  { layer: 'bone', region: 'leg-right', file: 'lod1-leg-right-bone.glb' },
+];
 
 const B64 = (() => {
   const table = new Uint8Array(128);
@@ -63,37 +80,97 @@ function selectedLayers(layer: Layer): AtlasLayer[] {
   return ['muscle', 'organ'];
 }
 
-type Pose = { zoom: number; turn: number; layers: AtlasLayer[] };
+type Pose = { zoom: number; turn: number; scroll: number; slide: number; layers: AtlasLayer[] };
 
 type MeshEntry = { layer: AtlasLayer; region: string; object: THREE.Object3D };
+type DetailEntry = { layer: AtlasLayer; region: string; root: THREE.Object3D };
+
+const REGION_LABELS: Record<string, string> = {
+  head: 'Head',
+  torso: 'Torso',
+  'arm-left': 'Left arm',
+  'arm-right': 'Right arm',
+  'leg-left': 'Left leg',
+  'leg-right': 'Right leg',
+};
 
 function regionOf(object: THREE.Object3D): string {
-  const direct = object.userData.atlas_region ?? object.parent?.userData?.atlas_region;
-  if (typeof direct === 'string' && direct) return direct;
-  const raw = String(object.userData.name || object.name || '');
-  const match = raw.match(/(?:skin|muscle|organ|bone)::(.+)$/);
-  return match?.[1] ?? 'body';
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    const direct = current.userData.atlas_region;
+    if (typeof direct === 'string' && direct) return direct;
+    const raw = String(current.name || current.userData.name || '');
+    const match = raw.match(/(?:skin|muscle|organ|bone)::(.+)$/);
+    if (match?.[1]) return match[1];
+    current = current.parent;
+  }
+  return 'body';
 }
+
+/** Far meshes are one piece per region. Their anatomy name is only a sample, not the whole shape. */
+function partLabel(object: THREE.Object3D): string {
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    if (current.userData.regionChunk) {
+      const region = regionOf(current);
+      return REGION_LABELS[region] ?? region;
+    }
+    const anatomy = current.userData.anatomy;
+    if (typeof anatomy === 'string' && anatomy) return prettyAnatomy(anatomy);
+    current = current.parent;
+  }
+  const region = regionOf(object);
+  return REGION_LABELS[region] ?? 'Body';
+}
+
+function prettyAnatomy(anatomy: string): string {
+  const side = anatomy.match(/\.(l|r)$/i);
+  const base = anatomy
+    .replace(/\.(l|r|ol|or|el|er)$/i, '')
+    .replace(/[()]/g, '')
+    .trim();
+  if (!side) return base;
+  return `${base} · ${side[1].toLowerCase() === 'l' ? 'Left' : 'Right'}`;
+}
+
+function isShown(object: THREE.Object3D): boolean {
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    if (!current.visible) return false;
+    current = current.parent;
+  }
+  return true;
+}
+
+export type BodyPicker = MutableRefObject<
+  ((x: number, y: number, viewWidth: number, viewHeight: number) => string | null) | null
+>;
 
 export function AtlasBody({
   zoom,
   turn,
+  scroll,
+  slide = 0,
   layer,
   background,
   onReady,
   onError,
   visible,
+  picker,
 }: {
   zoom: number;
   turn: number;
+  scroll: number;
+  slide?: number;
   layer: Layer;
   background: string;
   onReady?: () => void;
   onError?: (message: string) => void;
   visible: boolean;
+  picker?: BodyPicker;
 }) {
-  const pose = useRef<Pose>({ zoom, turn, layers: selectedLayers(layer) });
-  pose.current = { zoom, turn, layers: selectedLayers(layer) };
+  const pose = useRef<Pose>({ zoom, turn, scroll, slide, layers: selectedLayers(layer) });
+  pose.current = { zoom, turn, scroll, slide, layers: selectedLayers(layer) };
   const alive = useRef(true);
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
@@ -197,8 +274,23 @@ export function AtlasBody({
 
     const camera = new THREE.PerspectiveCamera(34, width / Math.max(height, 1), 0.05, 40);
     const entries: MeshEntry[] = [];
-    const detail = new Map<AtlasLayer, THREE.Object3D>();
+    const detail: DetailEntry[] = [];
     const materials = new Map<string, THREE.MeshStandardMaterial>();
+    let selectedMesh: THREE.Mesh | null = null;
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    if (picker) {
+      picker.current = (x, y, viewWidth, viewHeight) => {
+        if (viewWidth <= 0 || viewHeight <= 0) return null;
+        pointer.x = (x / viewWidth) * 2 - 1;
+        pointer.y = -(y / viewHeight) * 2 + 1;
+        raycaster.setFromCamera(pointer, camera);
+        const hits = raycaster.intersectObjects(scene.children, true);
+        const hit = hits.find((item) => (item.object as THREE.Mesh).isMesh && isShown(item.object));
+        selectedMesh = hit ? (hit.object as THREE.Mesh) : null;
+        return hit ? partLabel(hit.object) : null;
+      };
+    }
 
     const paint = (root: THREE.Object3D, atlasLayer: AtlasLayer, visible: ReadonlySet<AtlasLayer>) => {
       const deeper = ORDER.slice(ORDER.indexOf(atlasLayer) + 1).some((item) => visible.has(item));
@@ -223,37 +315,72 @@ export function AtlasBody({
           materials.set(keyName, material);
         }
         mesh.material = material;
+        if (selectedMesh && mesh !== selectedMesh) {
+          const dimKey = `${keyName}:dim`;
+          let dim = materials.get(dimKey);
+          if (!dim) {
+            dim = material.clone();
+            dim.transparent = true;
+            dim.opacity = 0.18;
+            dim.depthWrite = false;
+            materials.set(dimKey, dim);
+          }
+          mesh.material = dim;
+        } else if (mesh === selectedMesh) {
+          let highlight = mesh.userData.hi as THREE.MeshStandardMaterial | undefined;
+          if (!highlight || highlight.userData.source !== material.uuid) {
+            highlight = material.clone();
+            highlight.color.set('#fff1c9');
+            highlight.emissive.set('#ffb703');
+            highlight.emissiveIntensity = 0.85;
+            highlight.opacity = 1;
+            highlight.transparent = false;
+            highlight.depthWrite = true;
+            highlight.userData.source = material.uuid;
+            mesh.userData.hi = highlight;
+          }
+          mesh.material = highlight;
+        }
         mesh.frustumCulled = true;
       });
     };
 
     const apply = () => {
       const visible = new Set(pose.current.layers);
-      const close = pose.current.zoom >= 1.55;
+      const close = pose.current.zoom >= 1.2;
+      const covered = (layer: AtlasLayer, region: string) =>
+        close && detail.some((item) => item.layer === layer && item.region === region);
       for (const entry of entries) {
-        const covered = close && entry.region === 'torso' && detail.has(entry.layer);
-        entry.object.visible = visible.has(entry.layer) && !covered;
+        entry.object.visible = visible.has(entry.layer) && !covered(entry.layer, entry.region);
         if (entry.object.visible) paint(entry.object, entry.layer, visible);
       }
-      for (const [atlasLayer, root] of detail) {
-        root.visible = close && visible.has(atlasLayer);
-        if (root.visible) paint(root, atlasLayer, visible);
+      for (const item of detail) {
+        item.root.visible = close && visible.has(item.layer);
+        if (item.root.visible) paint(item.root, item.layer, visible);
       }
     };
 
     let frame = 0;
-    const home = { center: new THREE.Vector3(0, 0.9, 0), distance: 3.1 };
+    const home = {
+      center: new THREE.Vector3(0, 0.9, 0),
+      distance: 3.1,
+      above: 0.95,
+      below: 0.7,
+      side: 0.8,
+    };
 
     const frameCamera = () => {
-      const { zoom: z, turn: yaw } = pose.current;
-      const distance = home.distance / Math.max(z, 0.4);
+      const { zoom: level, turn: yaw, scroll: lift, slide: across } = pose.current;
+      const distance = home.distance / Math.max(level, 0.4);
       const rad = THREE.MathUtils.degToRad(yaw);
-      camera.position.set(
-        home.center.x + Math.sin(rad) * distance,
-        home.center.y,
-        home.center.z + Math.cos(rad) * distance,
-      );
-      camera.lookAt(home.center);
+      const shift = lift >= 0 ? lift * home.above : lift * home.below;
+      const y = home.center.y + shift;
+      // Same world distance per swipe as the vertical move, so the body follows the finger.
+      const side = -across * home.side;
+      const x = home.center.x + side * Math.cos(rad);
+      const depth = home.center.z - side * Math.sin(rad);
+      camera.position.set(x + Math.sin(rad) * distance, y, depth + Math.cos(rad) * distance);
+      camera.lookAt(x, y, depth);
     };
 
     const loop = () => {
@@ -288,6 +415,7 @@ export function AtlasBody({
         root.traverse((object) => {
           const mesh = object as THREE.Mesh;
           if (!mesh.isMesh) return;
+          mesh.userData.regionChunk = true;
           const region = regionOf(object);
           entries.push({ layer: atlasLayer, region, object });
         });
@@ -300,21 +428,25 @@ export function AtlasBody({
       const radius = Math.max(size.x, size.y) * 0.5;
       home.center.copy(center);
       home.distance = radius / Math.tan((camera.fov * Math.PI) / 360) + size.z * 0.15;
+      const half = size.y * 0.5;
+      home.above = half + size.y * 0.42;
+      home.below = half + size.y * 0.12;
+      home.side = (home.above + home.below) / 2;
       frameCamera();
       onReady?.();
 
       try {
-        await Promise.all(
-          ORDER.map(async (atlasLayer) => {
-            const file = TORSO_DETAIL[atlasLayer];
-            if (!file) return;
-            const root = await load(file);
+        for (const item of DETAIL) {
+          try {
+            const root = await load(item.file);
             if (!alive.current) return;
             root.visible = false;
-            detail.set(atlasLayer, root);
+            detail.push({ layer: item.layer, region: item.region, root });
             scene.add(root);
-          }),
-        );
+          } catch (error) {
+            console.warn('atlas detail load failed', item.file, error);
+          }
+        }
       } catch (error) {
         console.warn('atlas detail load failed', error);
       }

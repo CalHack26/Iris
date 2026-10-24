@@ -20,6 +20,7 @@ import { useSomaStore } from '@/store/useSomaStore';
 import { colors } from '@/theme/tokens';
 
 import { AtlasBody } from './AtlasBody';
+import { useLockPageScroll } from './Screen';
 import { Txt } from './Txt';
 
 const IMAGES = {
@@ -52,8 +53,8 @@ type Props = {
   style?: StyleProp<ViewStyle>;
 };
 
-export const ZOOM_RANGE = [1, 2.5] as const;
-export const TURN_RANGE = [-35, 35] as const;
+export const ZOOM_RANGE = [1, 6] as const;
+export const TURN_RANGE = [-180, 180] as const;
 const clamp = (v: number, [lo, hi]: readonly [number, number]) => Math.min(hi, Math.max(lo, v));
 
 /**
@@ -91,9 +92,37 @@ export function AnatomyCanvas({
   const [modelReady, setModelReady] = useState(false);
   const [modelFailed, setModelFailed] = useState<string | null>(null);
   const [live, setLive] = useState<Point[] | null>(null);
+  const [scroll, setScroll] = useState(0);
+  const [slide, setSlide] = useState(0);
   const pinchStart = useRef(zoom);
   const turnStart = useRef(turn);
+  const turnRef = useRef(turn);
+  turnRef.current = turn;
+  const scrollRef = useRef(scroll);
+  scrollRef.current = scroll;
+  const slideRef = useRef(slide);
+  slideRef.current = slide;
+  const scrollStart = useRef(0);
+  const slideStart = useRef(0);
   const liveStroke = useRef<Point[]>([]);
+  const prevPose = useRef({ zoom, turn });
+  if (prevPose.current.zoom !== zoom || prevPose.current.turn !== turn) {
+    const cleared = zoom === 1 && turn === 0;
+    prevPose.current = { zoom, turn };
+    if (cleared && (scroll !== 0 || slide !== 0)) {
+      setScroll(0);
+      setSlide(0);
+    }
+  }
+  const picker = useRef<((x: number, y: number, viewWidth: number, viewHeight: number) => string | null) | null>(
+    null,
+  );
+  const lockPageScroll = useLockPageScroll();
+  const fingers = useRef(0);
+  const holdPage = (down: boolean) => {
+    fingers.current = Math.max(0, fingers.current + (down ? 1 : -1));
+    lockPageScroll(fingers.current > 0);
+  };
 
   const img = IMAGES[image];
   const box = width ? (imageBox?.(width, height) ?? { left: 0, top: 0, width, height }) : null;
@@ -114,50 +143,96 @@ export function AnatomyCanvas({
     runOnJS: true,
     enabled: mode === 'mark',
     onActivate: (e) => {
+      if (modelReady && !modelFailed) {
+        const part = picker.current?.(e.x, e.y, width, height);
+        if (!part) return;
+        const p = toImage(e.x, e.y) ?? { x: width ? e.x / width : 0.5, y: height ? e.y / height : 0.5 };
+        onMark?.(p);
+        useSomaStore.getState().updateDraft({ location: part });
+        return;
+      }
       const p = toImage(e.x, e.y);
       if (p) onMark?.(p);
     },
   });
 
-  const pan = usePanGesture({
+  const drawPan = usePanGesture({
     runOnJS: true,
-    enabled: mode === 'draw' || mode === 'rotate',
+    enabled: mode === 'draw',
+    maxPointers: 1,
     minDistance: 2,
     onActivate: (e) => {
-      turnStart.current = turn;
-      if (mode === 'draw') {
-        const p = toImage(e.x, e.y);
-        liveStroke.current = p ? [p] : [];
-        setLive(liveStroke.current);
-      }
+      const p = toImage(e.x, e.y);
+      liveStroke.current = p ? [p] : [];
+      setLive(liveStroke.current);
     },
     onUpdate: (e) => {
-      if (mode === 'rotate') {
-        onTurn?.(clamp(turnStart.current + e.translationX / 4, TURN_RANGE));
-        return;
-      }
       const p = toImage(e.x, e.y);
       if (!p) return;
       liveStroke.current = [...liveStroke.current, p];
       setLive(liveStroke.current);
     },
     onDeactivate: () => {
-      if (mode === 'draw' && liveStroke.current.length > 1) onStroke?.(liveStroke.current);
+      if (liveStroke.current.length > 1) onStroke?.(liveStroke.current);
       liveStroke.current = [];
       setLive(null);
     },
   });
 
+  const scrollPan = usePanGesture({
+    runOnJS: true,
+    enabled: mode !== 'draw' && mode !== 'view',
+    minPointers: 1,
+    maxPointers: 1,
+    minDistance: 8,
+    onActivate: () => {
+      scrollStart.current = scrollRef.current;
+      slideStart.current = slideRef.current;
+    },
+    onUpdate: (e) => {
+      if (e.numberOfPointers != null && e.numberOfPointers > 1) return;
+      const gain = Math.max(height * 1.4, 1);
+      setScroll(Math.min(1, Math.max(-1, scrollStart.current + e.translationY / gain)));
+      setSlide(Math.min(1, Math.max(-1, slideStart.current + e.translationX / gain)));
+    },
+  });
+
+  const turnPan = usePanGesture({
+    runOnJS: true,
+    enabled: mode !== 'view',
+    minPointers: 2,
+    maxPointers: 2,
+    onActivate: () => {
+      turnStart.current = turnRef.current;
+    },
+    onUpdate: (e) => {
+      if (e.numberOfPointers != null && e.numberOfPointers < 2) return;
+      onTurn?.(clamp(turnStart.current - e.translationX / 3, TURN_RANGE));
+    },
+  });
+
+  const pinchFocal = useRef(0);
+  const pinchTurn = useRef(0);
+  const pinchTwist = useRef(0);
   const pinch = usePinchGesture({
     runOnJS: true,
     enabled: mode !== 'view',
-    onActivate: () => {
+    onActivate: (e) => {
       pinchStart.current = zoom;
+      pinchFocal.current = e.focalX ?? 0;
+      pinchTwist.current = e.rotation ?? 0;
+      pinchTurn.current = turnRef.current;
     },
-    onUpdate: (e) => onZoom?.(clamp(pinchStart.current * e.scale, ZOOM_RANGE)),
+    onUpdate: (e) => {
+      onZoom?.(clamp(pinchStart.current * e.scale, ZOOM_RANGE));
+      const dragged = typeof e.focalX === 'number' ? e.focalX - pinchFocal.current : 0;
+      const twisted =
+        typeof e.rotation === 'number' ? ((e.rotation - pinchTwist.current) * 180) / Math.PI : 0;
+      onTurn?.(clamp(pinchTurn.current - dragged / 3 - twisted, TURN_RANGE));
+    },
   });
 
-  const gestures = useSimultaneousGestures(tap, pan, pinch);
+  const gestures = useSimultaneousGestures(tap, drawPan, scrollPan, turnPan, pinch);
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
   const allStrokes = live ? [...strokes, live] : strokes;
   const placed = mark ? place(mark) : null;
@@ -165,14 +240,22 @@ export function AnatomyCanvas({
   const haloSize = numbered ? 44 : 42;
 
   return (
-    <View style={[styles.frame, { height, backgroundColor: background, borderRadius: radius }, style]} onLayout={onLayout}>
+    <View
+      style={[styles.frame, { height, backgroundColor: background, borderRadius: radius }, style]}
+      onLayout={onLayout}
+      onTouchStart={() => holdPage(true)}
+      onTouchEnd={() => holdPage(false)}
+      onTouchCancel={() => holdPage(false)}>
       {modelFailed ? null : (
         <AtlasBody
           zoom={zoom}
           turn={turn}
+          scroll={scroll}
+          slide={slide}
           layer={layer}
           background={background}
           visible={modelReady}
+          picker={picker}
           onReady={() => setModelReady(true)}
           onError={(message) => setModelFailed(message)}
         />
@@ -227,25 +310,26 @@ export function AnatomyCanvas({
           ) : null}
         </View>
       </GestureDetector>
-      <Txt size={10} color={colors.muted} style={styles.credit} pointerEvents="none">
-        BodyParts3D · Z-Anatomy, CC BY-SA
-      </Txt>
-      <Txt
-        size={12}
-        weight={labels.weight ?? 'regular'}
-        color={colors.muted}
-        style={[styles.abs, { top: labels.top, left: labels.rLeft }]}
-        pointerEvents="none">
-        R
-      </Txt>
-      <Txt
-        size={12}
-        weight={labels.weight ?? 'regular'}
-        color={colors.muted}
-        style={[styles.abs, { top: labels.top, right: labels.lRight }]}
-        pointerEvents="none">
-        L
-      </Txt>
+      {modelReady && !modelFailed ? null : (
+        <>
+          <Txt
+            size={12}
+            weight={labels.weight ?? 'regular'}
+            color={colors.muted}
+            style={[styles.abs, { top: labels.top, left: labels.rLeft }]}
+            pointerEvents="none">
+            R
+          </Txt>
+          <Txt
+            size={12}
+            weight={labels.weight ?? 'regular'}
+            color={colors.muted}
+            style={[styles.abs, { top: labels.top, right: labels.lRight }]}
+            pointerEvents="none">
+            L
+          </Txt>
+        </>
+      )}
       {children}
     </View>
   );
@@ -258,7 +342,6 @@ function strokePath(points: Point[]) {
 const styles = StyleSheet.create({
   frame: { overflow: 'hidden', alignSelf: 'stretch' },
   abs: { position: 'absolute' },
-  credit: { position: 'absolute', top: 10, alignSelf: 'center' },
   badge: {
     width: 24,
     height: 24,
