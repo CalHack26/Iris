@@ -33,7 +33,7 @@ export default function SavedRecord() {
   const marked = Boolean(record.location);
 
   const edit = () => {
-    if (!marked) return router.navigate('/record-symptom');
+    if (!marked) return router.navigate({ pathname: '/record-symptom', params: { id: record.id } });
     editRecord(record.id);
     router.navigate('/body-map');
   };

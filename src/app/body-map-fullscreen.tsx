@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,15 +34,17 @@ export default function FullScreenAnatomy() {
     if (recordId) useSomaStore.getState().editRecord(recordId);
   }, [recordId]);
 
-  const exit = () => {
-    if (recordId) useSomaStore.setState({ draft: pendingDraft.current });
-    router.back();
-  };
+  // Restore on unmount so swipe-down and the Android back button put the in-progress mark back too.
+  useEffect(
+    () => () => {
+      if (recordId) useSomaStore.setState({ draft: pendingDraft.current });
+    },
+    [recordId],
+  );
+
+  const exit = () => router.back();
   const save = () => {
-    if (recordId) {
-      useSomaStore.getState().saveDraft();
-      useSomaStore.setState({ draft: pendingDraft.current });
-    }
+    if (recordId) useSomaStore.getState().saveDraft();
     router.back();
   };
 

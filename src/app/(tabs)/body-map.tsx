@@ -22,11 +22,14 @@ import { Screen, Section } from '@/components/Screen';
 import { Txt } from '@/components/Txt';
 import { dateTimeComma, feelingLabel, layerLabel, shortLocation } from '@/lib/format';
 import { useMarking } from '@/lib/useMarking';
+import { useSomaStore } from '@/store/useSomaStore';
 import { colors, shadow } from '@/theme/tokens';
 
 export default function MarkAPain() {
   const m = useMarking();
   const { draft } = m;
+  const { editingId } = draft;
+  const discardEdit = useSomaStore((s) => s.discardEdit);
   const hasMark = m.marks > 0;
 
   return (
@@ -36,6 +39,18 @@ export default function MarkAPain() {
           <Txt size={14} color={colors.muted} lh={1.45}>
             {dateTimeComma(new Date(draft.at))}
           </Txt>
+          {editingId ? (
+            <PillButton
+              label="Cancel edit"
+              variant="outline"
+              height={40}
+              style={{ alignSelf: 'flex-start' }}
+              onPress={() => {
+                discardEdit();
+                router.navigate({ pathname: '/record/[id]', params: { id: editingId } });
+              }}
+            />
+          ) : null}
         </PageIntro>
       </Section>
 

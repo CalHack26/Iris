@@ -17,6 +17,7 @@ import { colors } from '@/theme/tokens';
 export default function Notifications() {
   const notifications = useSomaStore((s) => s.notifications);
   const markRead = useSomaStore((s) => s.markNotificationRead);
+  const discardEdit = useSomaStore((s) => s.discardEdit);
   const unread = notifications.filter((n) => !n.read).length;
   const groupDate = notifications[0] ? new Date(notifications[0].at) : new Date();
   const isToday = groupDate.toDateString() === new Date().toDateString();
@@ -66,7 +67,15 @@ export default function Notifications() {
               size={14}
               onPress={act(n.id, '/record-symptom')}
             />
-            <PillButton label="mark pain" height={48} size={14} onPress={act(n.id, '/body-map')} />
+            <PillButton
+              label="mark pain"
+              height={48}
+              size={14}
+              onPress={() => {
+                discardEdit();
+                act(n.id, '/body-map')();
+              }}
+            />
             <Pressable accessibilityRole="link" onPress={act(n.id, '/sensors')} style={styles.link}>
               <Txt size={13} weight="semibold">
                 View sensor data

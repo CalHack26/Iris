@@ -100,8 +100,7 @@ export default function SymptomSurvey() {
   const next = () => {
     if (step < 3) return setStep(step + 1);
     const id = saveDraft();
-    router.back();
-    router.navigate({ pathname: '/record/[id]', params: { id } });
+    router.dismissTo({ pathname: '/record/[id]', params: { id } });
   };
 
   const cycleWhen = () => {
@@ -349,8 +348,8 @@ const styles = StyleSheet.create({
   },
   heading: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 44 },
   row: { flexDirection: 'row', gap: 8 },
-  severityHeader: { height: 24 },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  severityHeader: { height: 24 },
   infoTile: { backgroundColor: colors.field, borderRadius: 18, padding: 12, gap: 6, height: 68 },
   note: { backgroundColor: colors.field, borderRadius: radii.field, padding: 16, gap: 12 },
   noteInput: {

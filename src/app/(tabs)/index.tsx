@@ -19,13 +19,14 @@ import { Screen, Section } from '@/components/Screen';
 import { Txt } from '@/components/Txt';
 import { dateRange, dayMonth, feelingLabel, longDate, shortDateTime, shortLocation } from '@/lib/format';
 import { fmtAvg, range, regionName, severityTrend } from '@/lib/insights';
-import { useMarkedRecords } from '@/store/useSomaStore';
+import { useMarkedRecords, useSomaStore } from '@/store/useSomaStore';
 import { colors } from '@/theme/tokens';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
 export default function Overview() {
   const records = useMarkedRecords();
+  const discardEdit = useSomaStore((s) => s.discardEdit);
   const latest = records[0];
   const trend = severityTrend(records.slice(0, 6));
   const severities = trend.chrono.map((r) => r.severity);
@@ -44,7 +45,10 @@ export default function Overview() {
               variant="primary"
               height={48}
               paddingH={18}
-              onPress={() => router.navigate('/body-map')}
+              onPress={() => {
+                discardEdit();
+                router.navigate('/body-map');
+              }}
             />
             <PillButton
               label="Record a symptom"

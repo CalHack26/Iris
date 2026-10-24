@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View, type TextInputInstance } from 'react-native';
 
 import Back from '@/assets/icons/back.svg';
@@ -17,7 +17,10 @@ import { useSomaStore } from '@/store/useSomaStore';
 import { colors, fonts, radii } from '@/theme/tokens';
 
 export default function RecordSymptom() {
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const navigation = useNavigation<{ setParams: (params: { id?: string }) => void }>();
   const addTextRecord = useSomaStore((s) => s.addTextRecord);
+  const updateTextRecord = useSomaStore((s) => s.updateTextRecord);
   const [text, setText] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [tagOptions, setTagOptions] = useState(QUICK_TAGS);
@@ -44,11 +47,33 @@ export default function RecordSymptom() {
     setRecording((r) => !r);
   };
 
+  // The tab stays mounted between visits, so load the record being edited on focus and clear everything on blur.
+  useFocusEffect(
+    useCallback(() => {
+      const editing = id ? useSomaStore.getState().records.find((r) => r.id === id) : undefined;
+      if (editing) {
+        setText(editing.note);
+        setTags(editing.tags);
+        setTagOptions((opts) => [...opts, ...editing.tags.filter((t) => !opts.includes(t))]);
+      }
+      return () => {
+        setText('');
+        setTags([]);
+        setTagOptions(QUICK_TAGS);
+        setShowMore(false);
+        setRecording(false);
+        setVoiceHint(false);
+        if (id) navigation.setParams({ id: undefined });
+      };
+    }, [id, navigation]),
+  );
+
   const save = () => {
-    const id = addTextRecord({ note: text.trim(), tags });
-    setText('');
-    setTags([]);
-    router.navigate({ pathname: '/record/[id]', params: { id } });
+    const note = text.trim();
+    let savedId = id;
+    if (savedId) updateTextRecord(savedId, { note, tags });
+    else savedId = addTextRecord({ note, tags });
+    router.navigate({ pathname: '/record/[id]', params: { id: savedId } });
   };
 
   return (
@@ -146,7 +171,7 @@ export default function RecordSymptom() {
           ) : null}
         </Card>
 
-        <PillButton label="Save symptom" variant="primary" height={48} disabled={!canSave} onPress={save} />
+        <PillButton label={id ? 'Save changes' : 'Save symptom'} variant="primary" height={48} disabled={!canSave} onPress={save} />
       </Section>
     </Screen>
   );
@@ -159,6 +184,7 @@ function Tag({ label, selected, onPress }: { label: string; selected: boolean; o
       accessibilityState={{ checked: selected }}
       onPress={onPress}
       style={[styles.tag, { backgroundColor: selected ? colors.accentSoft : colors.field }]}>
+      {selected ? <Txt size={12} color={colors.accent}>✓</Txt> : null}
       <Txt size={12} weight={selected ? 'semibold' : 'medium'} color={selected ? colors.accent : colors.ink}>
         {label}
       </Txt>
@@ -181,15 +207,14 @@ const styles = StyleSheet.create({
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tag: {
+    flexDirection: 'row',
+    gap: 6,
     height: 36,
     paddingHorizontal: 14,
     borderRadius: radii.pill,
-      {selected ? <Txt size={12} color={colors.accent}>✓</Txt> : null}
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'flex-start',
   },
   heading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 });
-    flexDirection: 'row',
-    gap: 6,

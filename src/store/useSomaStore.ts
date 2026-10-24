@@ -26,12 +26,16 @@ type SomaState = {
   draft: Draft;
   updateDraft: (patch: Partial<Draft>) => void;
   resetDraft: () => void;
+  /** Drop an in-progress edit of a saved record; a fresh, unsaved mark is left alone. */
+  discardEdit: () => void;
   /** Load an existing record into the draft so the mark-a-pain flow edits it. */
   editRecord: (id: string) => void;
   /** Save the draft as a new record (or over the record it edits). Returns the record id. */
   saveDraft: () => string;
   /** Save a typed or spoken symptom that has no body mark. Returns the record id. */
   addTextRecord: (input: { note: string; tags: string[] }) => string;
+  /** Overwrite the note and tags of an existing text-only record. */
+  updateTextRecord: (id: string, input: { note: string; tags: string[] }) => void;
   markNotificationRead: (id: string) => void;
 };
 
@@ -46,6 +50,7 @@ export const useSomaStore = create<SomaState>()(
 
       updateDraft: (patch) => set((s) => ({ draft: { ...s.draft, ...patch } })),
       resetDraft: () => set({ draft: emptyDraft() }),
+      discardEdit: () => set((s) => (s.draft.editingId ? { draft: emptyDraft() } : s)),
 
       editRecord: (id) => {
         const record = get().records.find((r) => r.id === id);
@@ -86,6 +91,9 @@ export const useSomaStore = create<SomaState>()(
         set((s) => ({ records: [record, ...s.records].sort(byNewest) }));
         return id;
       },
+
+      updateTextRecord: (id, { note, tags }) =>
+        set((s) => ({ records: s.records.map((r) => (r.id === id ? { ...r, note, tags } : r)) })),
 
       markNotificationRead: (id) =>
         set((s) => ({ notifications: s.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)) })),

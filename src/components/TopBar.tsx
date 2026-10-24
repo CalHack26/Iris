@@ -1,6 +1,6 @@
 import { router, type Href } from 'expo-router';
 import type { FC } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import type { SvgProps } from 'react-native-svg';
 
 import BrandAsterisk from '@/assets/icons/brand-asterisk.svg';
@@ -20,20 +20,27 @@ export type TopBarItem = 'translate' | 'sensors' | 'notifications';
 export function TopBar({ active }: { active?: TopBarItem }) {
   const unread = useHasUnread();
 
+  /** Tapping the page you're already on leaves it, so each icon works as a toggle. */
   const go = (item: TopBarItem, href: Href) => () => {
     if (item !== active) router.navigate(href);
+    else if (router.canGoBack()) router.back();
+    else router.navigate('/');
   };
 
   return (
     <View style={styles.bar}>
-      <View style={styles.brand}>
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel="Home"
+        onPress={() => router.navigate('/')}
+        style={({ pressed }) => [styles.brand, pressed && styles.pressed]}>
         <View style={styles.symbol}>
           <BrandAsterisk />
         </View>
         <Txt size={24} weight="semibold" lh={1.45}>
           soma
         </Txt>
-      </View>
+      </Pressable>
       <View style={styles.actions}>
         <RoundIcon
           icon={Speak}
@@ -50,23 +57,26 @@ export function TopBar({ active }: { active?: TopBarItem }) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={unread ? 'Notifications, unread' : 'Notifications'}
+          accessibilityState={{ selected: active === 'notifications' }}
           onPress={go('notifications', '/notifications')}
-          style={({ pressed }) => [styles.round, pressed && styles.pressed]}>
-          {active === 'notifications' ? (
-            <NotificationsActive />
-          ) : unread ? (
-            <Notifications />
-          ) : (
-            <View style={[styles.round, { backgroundColor: colors.background }]}>
-              <Bell />
-            </View>
-          )}
+          style={({ pressed }) => [
+            styles.round,
+            !unread && active !== 'notifications' && { backgroundColor: colors.background },
+            pressed && styles.pressed,
+          ]}>
+          {active === 'notifications' ? <NotificationsActive /> : unread ? <Notifications /> : <Bell />}
         </Pressable>
-        <View style={[styles.round, { backgroundColor: colors.sand }]} accessibilityLabel="Account: Alex Lee">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Account: Alex Lee"
+          onPress={() =>
+            Alert.alert('Alex Lee', 'Your records stay on this device. Account settings aren’t connected yet.')
+          }
+          style={({ pressed }) => [styles.round, { backgroundColor: colors.sand }, pressed && styles.pressed]}>
           <Txt size={13} weight="semibold" lh={1.45}>
             AL
           </Txt>
-        </View>
+        </Pressable>
       </View>
     </View>
   );
