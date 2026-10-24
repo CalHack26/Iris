@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { startBackend } from '@/lib/bootstrap';
 import { colors } from '@/theme/tokens';
 
 SplashScreen.preventAutoHideAsync();
@@ -13,6 +14,9 @@ const theme = { ...DefaultTheme, colors: { ...DefaultTheme.colors, background: c
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold });
+
+  // Supabase sync runs in the background; screens show local data until it lands.
+  useEffect(() => startBackend(), []);
 
   useEffect(() => {
     if (fontsLoaded || fontError) SplashScreen.hideAsync();
