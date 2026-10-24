@@ -32,7 +32,7 @@ export default function Notifications() {
         <PageIntro title="Notifications" subtitle="Updates from your sensor and symptom logs." />
       </Section>
 
-      <Section index={2}>
+      <Section index={2} gap={20}>
         <View style={styles.between}>
           <Txt size={12} weight="semibold" color={colors.muted} lh={1.45}>
             {`${isToday ? 'TODAY, ' : ''}${dayMonthLong(groupDate)}`.toUpperCase()}

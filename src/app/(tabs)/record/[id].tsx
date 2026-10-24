@@ -13,7 +13,7 @@ import { Screen, Section } from '@/components/Screen';
 import { Txt } from '@/components/Txt';
 import { date, dateTimeComma, feelingLabel, layerLabel, severityLabel, shortDateTime, sideLabel, time } from '@/lib/format';
 import { useSomaStore } from '@/store/useSomaStore';
-import { colors, shadow } from '@/theme/tokens';
+import { colors, radii, shadow } from '@/theme/tokens';
 
 export default function SavedRecord() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     top: 50,
     height: 40,
     width: 116,
-    borderRadius: 100,
+    borderRadius: radii.pill,
     backgroundColor: colors.white,
     flexDirection: 'row',
     alignItems: 'center',

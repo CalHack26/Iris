@@ -75,7 +75,7 @@ export default function RecordSymptom() {
         </PageIntro>
       </Section>
 
-      <Section index={2}>
+      <Section index={2} gap={20}>
         <Card gap={12}>
           <Txt size={15} weight="semibold" lh={1.45}>
             Speak or type
@@ -160,7 +160,7 @@ function Tag({ label, selected, onPress }: { label: string; selected: boolean; o
       onPress={onPress}
       style={[styles.tag, { backgroundColor: selected ? colors.accentSoft : colors.field }]}>
       <Txt size={12} weight={selected ? 'semibold' : 'medium'} color={selected ? colors.accent : colors.ink}>
-        {selected ? `✓  ${label}` : label}
+        {label}
       </Txt>
     </Pressable>
   );
@@ -184,9 +184,12 @@ const styles = StyleSheet.create({
     height: 36,
     paddingHorizontal: 14,
     borderRadius: radii.pill,
+      {selected ? <Txt size={12} color={colors.accent}>✓</Txt> : null}
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'flex-start',
   },
   heading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 });
+    flexDirection: 'row',
+    gap: 6,

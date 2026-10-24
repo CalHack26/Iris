@@ -39,7 +39,7 @@ export default function SymptomTranslation() {
         <PageIntro title="Plain words to medical terms" subtitle="Preserve best how you feel, but better understood by doctors." gap={16} />
       </Section>
 
-      <Section index={2}>
+      <Section index={2} gap={20}>
         <Card tone="sky">
           <View style={styles.between}>
             <Txt size={20} weight="medium">
@@ -128,7 +128,7 @@ export default function SymptomTranslation() {
                 Live translation isn’t connected yet, so your original words are shown.
               </Txt>
             ) : null}
-            <View style={styles.row}>
+            <View style={styles.actions}>
               <PillButton
                 label={copied ? 'Copied' : 'Copy'}
                 icon={Copy}
@@ -207,6 +207,7 @@ function LanguagePill({ label, onPress }: { label: string; onPress?: () => void 
 const styles = StyleSheet.create({
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  actions: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   language: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -217,6 +218,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   entry: { backgroundColor: colors.surface, borderRadius: radii.field, padding: 16, gap: 10, minHeight: 190 },
-  input: { fontFamily: fonts.regular, fontSize: 15, lineHeight: 22, color: colors.ink, padding: 0, textAlignVertical: 'top' },
+  input: { fontFamily: fonts.regular, fontSize: 15, lineHeight: 23, color: colors.ink, padding: 0, textAlignVertical: 'top' },
   keyword: { backgroundColor: colors.sage, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 },
 });

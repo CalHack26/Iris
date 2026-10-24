@@ -16,8 +16,8 @@ import { buildReport, reportHtml } from '@/lib/report';
 import { useMarkedRecords } from '@/store/useSomaStore';
 import { colors, radii } from '@/theme/tokens';
 
-/** Tile width encodes duration, as in the design (20 min ≈ 88pt … 45 min ≈ 184pt). */
-const tileWidth = (min: number) => Math.min(184, Math.max(88, min * 4));
+/** Tile width encodes duration in steps, as in the design (20 min = 88pt … 45 min = 184pt). */
+const tileWidth = (min: number) => (min <= 20 ? 88 : min <= 30 ? 104 : min <= 35 ? 136 : min <= 40 ? 160 : 184);
 
 export default function ClinicianReport() {
   const records = useMarkedRecords();
@@ -123,7 +123,7 @@ export default function ClinicianReport() {
                 </View>
               </View>
 
-              <Card tone="sky" padding={16} radius={20} gap={10}>
+              <Card tone="sky" padding={16} radius={radii.field} gap={10}>
                 <Txt size={16} weight="semibold" lh={1.45}>
                   Summary
                 </Txt>
@@ -175,7 +175,7 @@ export default function ClinicianReport() {
 
 const styles = StyleSheet.create({
   start: { alignSelf: 'flex-start' },
-  tile: { backgroundColor: colors.field, borderRadius: 20, padding: 16 },
+  tile: { backgroundColor: colors.field, borderRadius: radii.field, padding: 16 },
   history: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   historyTile: { backgroundColor: colors.field, borderRadius: 16, padding: 12, gap: 5 },
   limitations: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },

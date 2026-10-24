@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
     gap: 6,
     ...shadow.floating,
   },
-  dock: { backgroundColor: colors.white, borderRadius: radii.card, padding: 16, gap: 8 },
+  dock: { backgroundColor: colors.white, borderRadius: radii.card, padding: 16, gap: 8, minHeight: 290 },
   selected: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 44 },
   markId: {
     width: 30,

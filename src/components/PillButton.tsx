@@ -63,7 +63,7 @@ export function PillButton({
           gap,
           backgroundColor: v.bg,
           borderColor: v.border,
-          borderWidth: v.border ? StyleSheet.hairlineWidth * 2 : 0,
+          borderWidth: v.border ? 1 : 0,
           opacity: disabled ? 0.4 : pressed ? 0.75 : 1,
         },
         flex && styles.flex,

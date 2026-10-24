@@ -32,6 +32,9 @@ export default function RecentTrends() {
   const series = marked.filter((r) => r.location === focus);
   const trend = severityTrend(series);
   const severities = trend.chrono.map((r) => r.severity);
+  const firstAt = trend.chrono.length ? Date.parse(trend.chrono[0].at) : 0;
+  const spanMs = trend.chrono.length ? Date.parse(trend.chrono[trend.chrono.length - 1].at) - firstAt : 0;
+  const dayPositions = spanMs > 0 ? trend.chrono.map((r) => (Date.parse(r.at) - firstAt) / spanMs) : undefined;
   const [lo, hi] = range(severities);
 
   const shown = records.filter((r) =>
@@ -58,7 +61,8 @@ export default function RecentTrends() {
           label="Make an appointment"
           icon={CalendarWhite}
           variant="primary"
-          height={49}
+          height={48}
+          paddingH={18}
           size={14}
           onPress={() =>
             Alert.alert('Make an appointment', 'Booking isn’t connected yet. Share your report with your clinician from the Report tab.')
@@ -66,7 +70,7 @@ export default function RecentTrends() {
         />
       </Section>
 
-      <Section index={3}>
+      <Section index={3} gap={20}>
         {series.length ? (
           <Card>
             <View style={styles.between}>
@@ -91,6 +95,7 @@ export default function RecentTrends() {
               <View style={{ flex: 1 }}>
                 <LineChart
                   values={severities}
+                  xs={dayPositions}
                   min={0}
                   max={10}
                   height={160}
@@ -259,9 +264,9 @@ const styles = StyleSheet.create({
   },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  plotRow: { flexDirection: 'row', gap: 12 },
+  plotRow: { flexDirection: 'row', gap: 12, paddingRight: 14 },
   axis: { width: 24, height: 160, justifyContent: 'space-between' },
-  dateAxis: { flexDirection: 'row', justifyContent: 'space-between', paddingLeft: 36 },
+  dateAxis: { flexDirection: 'row', justifyContent: 'space-between', paddingRight: 50 },
   start: { alignSelf: 'flex-start' },
   row: { paddingVertical: 12, gap: 10 },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },

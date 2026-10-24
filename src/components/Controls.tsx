@@ -95,7 +95,7 @@ export function InfoNote({
         style,
       ]}>
       <Icon />
-      <Txt size={size} color={colors.muted} lh={1.4} style={{ flex: 1 }}>
+      <Txt size={size} color={colors.muted} lh={tone === 'sand' ? 1.45 : 1.4} style={{ flex: 1 }}>
         {children}
       </Txt>
     </View>

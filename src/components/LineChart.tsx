@@ -6,6 +6,8 @@ import { colors } from '@/theme/tokens';
 
 type Props = {
   values: number[];
+  /** Optional 0–1 horizontal position per value (e.g. by date); points are evenly spaced when omitted. */
+  xs?: number[];
   min: number;
   max: number;
   height: number;
@@ -24,6 +26,7 @@ type Props = {
 /** Minimal line chart matching the design's plots (severity history, sensor averages, sparkline). */
 export function LineChart({
   values,
+  xs,
   min,
   max,
   height,
@@ -40,7 +43,8 @@ export function LineChart({
   const span = max - min || 1;
   const y = (v: number) => insetY[0] + ((max - v) / span) * (height - insetY[0] - insetY[1]);
   const step = values.length > 1 ? (width - insetX[0] - insetX[1]) / (values.length - 1) : 0;
-  const x = (i: number) => insetX[0] + i * step;
+  const x = (i: number) =>
+    xs && xs.length === values.length ? insetX[0] + xs[i] * (width - insetX[0] - insetX[1]) : insetX[0] + i * step;
   const d = values.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join('');
 
   return (

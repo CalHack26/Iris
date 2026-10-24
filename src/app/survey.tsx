@@ -184,7 +184,7 @@ export default function SymptomSurvey() {
 
             {step === 2 ? (
               <>
-                <View style={styles.between}>
+                <View style={[styles.between, styles.severityHeader]}>
                   <Txt size={12} color={colors.muted}>
                     Pain intensity
                   </Txt>
@@ -240,7 +240,7 @@ export default function SymptomSurvey() {
                     accessibilityHint="Moves the time earlier"
                     onPress={cycleWhen}
                     style={[styles.infoTile, { flex: 195 }]}>
-                    <View style={styles.between}>
+                    <View style={[styles.between, { alignItems: 'flex-start' }]}>
                       <Txt size={11} color={colors.muted}>
                         When
                       </Txt>
@@ -349,6 +349,7 @@ const styles = StyleSheet.create({
   },
   heading: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 44 },
   row: { flexDirection: 'row', gap: 8 },
+  severityHeader: { height: 24 },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   infoTile: { backgroundColor: colors.field, borderRadius: 18, padding: 12, gap: 6, height: 68 },
   note: { backgroundColor: colors.field, borderRadius: radii.field, padding: 16, gap: 12 },

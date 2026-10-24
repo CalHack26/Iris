@@ -29,7 +29,7 @@ export function Badge({ children, tone = 'field', style }: Props) {
         { backgroundColor: t.bg, borderRadius: radii.pill, paddingHorizontal: 12, paddingVertical: 7, alignSelf: 'flex-start' },
         style,
       ]}>
-      <Txt size={12} weight="semibold" color={t.fg} lh={1.45}>
+      <Txt size={12} weight="semibold" color={t.fg}>
         {children}
       </Txt>
     </View>
