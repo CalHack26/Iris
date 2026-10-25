@@ -1,11 +1,12 @@
-import { loadPainMarks, upsertPainMark } from './data';
+import { loadPainMarks, markFromHit, upsertPainMark } from './data';
 import type { BodyLayer, NewPainMark, PainMark, PainType, PatternAlert, Vec3 } from './db-types';
 import { dateRange, FEELINGS } from './format';
-import type { Feeling, Layer, Notification, Point, SymptomRecord } from './types';
+import type { BodyMark, Feeling, Layer, Notification, Point, SymptomRecord } from './types';
 
 /**
- * Until the 3D body lands, marks come from the 2D front render. `mesh_name` says how to read the position back:
- * a tapped point, the centre of a drawn area (no tap), or no location at all (typed/spoken record).
+ * `mesh_name` says how to read the position back. A tap on the 3D body stores the real mesh name and a model-space
+ * point. Otherwise it is one of these: a tapped point on the 2D front render, the centre of a drawn area (no tap),
+ * or no location at all (typed/spoken record).
  */
 const MESH = { point: 'front-2d', drawn: 'front-2d-stroke', none: 'text-only' } as const;
 
@@ -19,20 +20,27 @@ const centroid = (pts: Point[]) => ({
   y: pts.reduce((a, p) => a + p.y, 0) / pts.length,
 });
 
-/** App record → `pain_marks` row. Strokes share the one path column as [x, y, strokeIndex]. */
+const is2d = (meshName: string) => (Object.values(MESH) as string[]).includes(meshName);
+
+/** App record → `pain_marks` row. Strokes (still 2D) share the one path column as [x, y, strokeIndex]. */
 export function toPainMark(r: SymptomRecord): NewPainMark & { id: string } {
   const firstStroke = r.strokes.find((s) => s.length);
   const pos = r.mark ?? (firstStroke ? centroid(firstStroke) : null);
   const stroke: Vec3[] = r.strokes.flatMap((s, i) => s.map((p): Vec3 => [p.x, p.y, i]));
+  const where = r.mark3d
+    ? markFromHit({ meshName: r.mark3d.mesh, point: r.mark3d.point, normal: r.mark3d.normal }, LAYER_TO_DB[r.layer], r.feeling)
+    : {
+        mesh_name: !r.location ? MESH.none : r.mark ? MESH.point : MESH.drawn,
+        pos_x: pos?.x ?? 0,
+        pos_y: pos?.y ?? 0,
+        pos_z: 0,
+      };
   return {
+    ...where,
     id: r.id,
     occurred_at: r.at,
     layer: LAYER_TO_DB[r.layer],
-    mesh_name: !r.location ? MESH.none : r.mark ? MESH.point : MESH.drawn,
     region: r.location,
-    pos_x: pos?.x ?? 0,
-    pos_y: pos?.y ?? 0,
-    pos_z: 0,
     stroke: stroke.length ? stroke : null,
     pain_type: r.feeling,
     intensity: r.severity,
@@ -42,7 +50,18 @@ export function toPainMark(r: SymptomRecord): NewPainMark & { id: string } {
   };
 }
 
-/** `pain_marks` row → app record. Marks saved by other clients (e.g. the future 3D view) show without a 2D point. */
+/** The 3D tap stored in a row, if it came from the 3D body. */
+function bodyMark(m: PainMark): BodyMark | undefined {
+  if (is2d(m.mesh_name)) return undefined;
+  const { normal_x: nx, normal_y: ny, normal_z: nz } = m;
+  return {
+    mesh: m.mesh_name,
+    point: { x: m.pos_x, y: m.pos_y, z: m.pos_z },
+    ...(nx != null && ny != null && nz != null ? { normal: { x: nx, y: ny, z: nz } } : {}),
+  };
+}
+
+/** `pain_marks` row → app record. Marks from the 3D body come back as `mark3d`, without a 2D point. */
 export function fromPainMark(m: PainMark): SymptomRecord {
   const strokes: Point[][] = [];
   if (m.mesh_name.startsWith('front-2d')) {
@@ -59,6 +78,7 @@ export function fromPainMark(m: PainMark): SymptomRecord {
     note: m.notes ?? '',
     tags: m.tags ?? [],
     mark: m.mesh_name === MESH.point ? { x: m.pos_x, y: m.pos_y } : undefined,
+    mark3d: bodyMark(m),
     strokes: strokes.filter(Boolean),
   };
 }

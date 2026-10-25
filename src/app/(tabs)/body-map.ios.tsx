@@ -65,6 +65,7 @@ export default function MarkAPain() {
         <AnatomyCanvas
           height={320}
           mark={draft.mark}
+          mark3d={draft.mark3d}
           strokes={draft.strokes}
           demoArea={draft.demoArea}
           mode={m.canvasMode}

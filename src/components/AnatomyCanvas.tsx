@@ -14,7 +14,7 @@ import SymptomHalo44 from '@/assets/icons/symptom-halo-44.svg';
 import SymptomHalo from '@/assets/icons/symptom-halo.svg';
 import SymptomLocation from '@/assets/icons/symptom-location.svg';
 import { coverRect, FRONT_IMAGE, frontToSaved, SAVED_IMAGE } from '@/lib/anatomy';
-import type { Point } from '@/lib/types';
+import type { BodyHit, BodyMark, Point } from '@/lib/types';
 import { colors } from '@/theme/tokens';
 
 import { Txt } from './Txt';
@@ -35,6 +35,8 @@ type Props = {
   background?: string;
   radius?: number;
   mark?: Point;
+  /** The 3D tap. Only the iOS and web canvases show the 3D body; this flat one ignores it. */
+  mark3d?: BodyMark;
   strokes?: Point[][];
   /** Show the design's drawn-area illustration around the mark (seeded example record). */
   demoArea?: boolean;
@@ -45,7 +47,8 @@ type Props = {
   mode?: CanvasMode;
   zoom?: number;
   turn?: number;
-  onMark?: (p: Point) => void;
+  /** `hit` is set when the tap landed on the 3D body (iOS and web only). */
+  onMark?: (p: Point, hit?: BodyHit) => void;
   onStroke?: (stroke: Point[]) => void;
   onZoom?: (zoom: number) => void;
   onTurn?: (deg: number) => void;
