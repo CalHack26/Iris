@@ -1,0 +1,124 @@
+{
+  "layers": [
+    "skin",
+    "muscle",
+    "organ",
+    "bone"
+  ],
+  "regions": [
+    {
+      "id": "head",
+      "label": "Head"
+    },
+    {
+      "id": "torso",
+      "label": "Torso"
+    },
+    {
+      "id": "arm-left",
+      "label": "Left arm"
+    },
+    {
+      "id": "arm-right",
+      "label": "Right arm"
+    },
+    {
+      "id": "leg-left",
+      "label": "Left leg"
+    },
+    {
+      "id": "leg-right",
+      "label": "Right leg"
+    }
+  ],
+  "files": {
+    "skin": {
+      "lod0": "lod0-skin.glb",
+      "lod1": {
+        "head": "lod1-head-skin.glb",
+        "torso": "lod1-torso-skin.glb",
+        "arm-left": "lod1-arm-left-skin.glb",
+        "arm-right": "lod1-arm-right-skin.glb",
+        "leg-left": "lod1-leg-left-skin.glb",
+        "leg-right": "lod1-leg-right-skin.glb"
+      },
+      "triangles": {
+        "lod0": 19483,
+        "lod1": {
+          "head": 6986,
+          "torso": 3000,
+          "arm-left": 3774,
+          "arm-right": 3774,
+          "leg-left": 3571,
+          "leg-right": 3571
+        }
+      }
+    },
+    "muscle": {
+      "lod0": "lod0-muscle.glb",
+      "lod1": {
+        "head": "lod1-head-muscle.glb",
+        "torso": "lod1-torso-muscle.glb",
+        "arm-left": "lod1-arm-left-muscle.glb",
+        "arm-right": "lod1-arm-right-muscle.glb",
+        "leg-left": "lod1-leg-left-muscle.glb",
+        "leg-right": "lod1-leg-right-muscle.glb"
+      },
+      "triangles": {
+        "lod0": 18523,
+        "lod1": {
+          "head": 15290,
+          "torso": 18462,
+          "arm-left": 15799,
+          "arm-right": 15799,
+          "leg-left": 16779,
+          "leg-right": 16778
+        }
+      }
+    },
+    "organ": {
+      "lod0": "lod0-organ.glb",
+      "lod1": {
+        "head": "lod1-head-organ.glb",
+        "torso": "lod1-torso-organ.glb",
+        "leg-left": "lod1-leg-left-organ.glb"
+      },
+      "triangles": {
+        "lod0": 4378,
+        "lod1": {
+          "head": 14564,
+          "torso": 11506,
+          "leg-left": 2169
+        }
+      }
+    },
+    "bone": {
+      "lod0": "lod0-bone.glb",
+      "lod1": {
+        "head": "lod1-head-bone.glb",
+        "torso": "lod1-torso-bone.glb",
+        "arm-left": "lod1-arm-left-bone.glb",
+        "arm-right": "lod1-arm-right-bone.glb",
+        "leg-left": "lod1-leg-left-bone.glb",
+        "leg-right": "lod1-leg-right-bone.glb"
+      },
+      "triangles": {
+        "lod0": 10804,
+        "lod1": {
+          "head": 12285,
+          "torso": 12907,
+          "arm-left": 11040,
+          "arm-right": 11040,
+          "leg-left": 11196,
+          "leg-right": 11154
+        }
+      }
+    }
+  },
+  "attribution": [
+    "BodyParts3D, Database Center for Life Science, Kousaku Okubo, CC BY-SA 2.1 Japan",
+    "Z-Anatomy, Gauthier Kervyn and contributors, CC BY-SA 4.0"
+  ],
+  "modifications": "Phone atlas exported from the Z-Anatomy blend. Skin is the regional body surface without hair. Muscle, organs (including the brain), and bone are split into head, torso, arms, and legs. Each piece has a coarse far mesh and a finer mesh that loads only while that region is close. Nerves, vessels, and male and female reproductive structures were not exported, so the body reads as unisex.",
+  "license": "Model geometry is CC BY-SA 4.0. https://creativecommons.org/licenses/by-sa/4.0/"
+}
