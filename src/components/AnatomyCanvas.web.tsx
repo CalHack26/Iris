@@ -15,7 +15,7 @@ import SymptomHalo44 from '@/assets/icons/symptom-halo-44.svg';
 import SymptomHalo from '@/assets/icons/symptom-halo.svg';
 import SymptomLocation from '@/assets/icons/symptom-location.svg';
 import { coverRect, FRONT_IMAGE, frontToSaved, SAVED_IMAGE } from '@/lib/anatomy';
-import type { Layer, Point } from '@/lib/types';
+import type { BodyHit, BodyMark, Layer, Point } from '@/lib/types';
 import { useSomaStore } from '@/store/useSomaStore';
 import { colors } from '@/theme/tokens';
 
@@ -34,7 +34,7 @@ import {
   ZOOM_RANGE,
 } from '@/atlas/web-view';
 
-import { AtlasBody } from './AtlasBody';
+import { AtlasBody, type BodyPicker } from './AtlasBody';
 import { useLockPageScroll } from './Screen';
 import { Txt } from './Txt';
 
@@ -53,6 +53,8 @@ type Props = {
   background?: string;
   radius?: number;
   mark?: Point;
+  /** The saved 3D tap, pinned on the body while the model is showing. */
+  mark3d?: BodyMark;
   strokes?: Point[][];
   demoArea?: boolean;
   numbered?: boolean;
@@ -60,7 +62,8 @@ type Props = {
   mode?: CanvasMode;
   zoom?: number;
   turn?: number;
-  onMark?: (p: Point) => void;
+  /** `hit` is set when the tap landed on the 3D body. */
+  onMark?: (p: Point, hit?: BodyHit) => void;
   onStroke?: (stroke: Point[]) => void;
   onZoom?: (zoom: number) => void;
   onTurn?: (deg: number) => void;
@@ -80,6 +83,7 @@ export function AnatomyCanvas({
   background = colors.anatomyBg,
   radius = 32,
   mark,
+  mark3d,
   strokes = [],
   demoArea,
   numbered,
@@ -129,9 +133,7 @@ export function AnatomyCanvas({
       setSlide(0);
     }
   }
-  const picker = useRef<((x: number, y: number, viewWidth: number, viewHeight: number) => string | null) | null>(
-    null,
-  );
+  const picker: BodyPicker = useRef<BodyPicker['current']>(null);
   const lockPageScroll = useLockPageScroll();
   const frameRef = useRef<View>(null);
   const onZoomRef = useRef(onZoom);
@@ -183,11 +185,10 @@ export function AnatomyCanvas({
     enabled: tapNamesPart(mode),
     onActivate: (e) => {
       if (modelReady && !modelFailed) {
-        const part = picker.current?.(e.x, e.y, width, height);
-        if (!part) return;
+        const hit = picker.current?.(e.x, e.y, width, height);
+        if (!hit) return;
         const p = toImage(e.x, e.y) ?? { x: width ? e.x / width : 0.5, y: height ? e.y / height : 0.5 };
-        onMark?.(p);
-        useSomaStore.getState().updateDraft({ location: part });
+        onMark?.(p, hit);
         return;
       }
       const p = toImage(e.x, e.y);
@@ -290,7 +291,9 @@ export function AnatomyCanvas({
   const gestures = useSimultaneousGestures(tap, drawPan, scrollPan, turnPan, pinch);
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
   const allStrokes = live ? [...strokes, live] : strokes;
-  const placed = mark ? place(mark) : null;
+  // A 3D mark is pinned on the model itself; the flat halo would drift as the body turns.
+  const pinned = Boolean(mark3d) && modelReady && !modelFailed;
+  const placed = mark && !pinned ? place(mark) : null;
   const Halo = numbered ? SymptomHalo44 : SymptomHalo;
   const haloSize = numbered ? 44 : 42;
 
@@ -313,6 +316,7 @@ export function AnatomyCanvas({
           background={background}
           visible={modelReady}
           picker={picker}
+          pin={mark3d}
           onReady={() => setModelReady(true)}
           onError={() => setModelFailed(true)}
         />

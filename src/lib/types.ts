@@ -14,6 +14,14 @@ export type Feeling =
 /** A point on the anatomy, normalised 0–1 against the front anatomy image (assets/images/anatomy-front.png). */
 export type Point = { x: number; y: number };
 
+export type Point3 = { x: number; y: number; z: number };
+
+/** A tap on the 3D body, in the model's own space. The model never moves (the camera does), so this is stable. */
+export type BodyMark = { mesh: string; point: Point3; normal?: Point3 };
+
+/** A tap on the 3D body: the label shown to the patient, and the mark that gets saved. */
+export type BodyHit = { label: string; mark: BodyMark };
+
 export type SymptomRecord = {
   id: string;
   /** ISO timestamp of when the symptom was felt. */
@@ -28,6 +36,8 @@ export type SymptomRecord = {
   note: string;
   tags: string[];
   mark?: Point;
+  /** Where the 3D body was tapped. Set alongside `mark`, which keeps the 2D screen point for the flat canvas. */
+  mark3d?: BodyMark;
   /** Freehand strokes drawn in Draw mode, in the same normalised space as `mark`. */
   strokes: Point[][];
   /** The seeded example record carries the drawn-area illustration from the design. */

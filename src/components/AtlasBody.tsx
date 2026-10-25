@@ -16,7 +16,8 @@ import {
   type AtlasLayer,
 } from '@/atlas/body-model';
 import { meshLook, useRawWebglContext } from '@/atlas/web-view';
-import type { Layer } from '@/lib/types';
+import type { BodyHit, BodyMark, Layer } from '@/lib/types';
+import { colors } from '@/theme/tokens';
 
 const COLOR: Record<AtlasLayer, string> = {
   skin: '#E0B494',
@@ -95,8 +96,21 @@ function isShown(object: THREE.Object3D): boolean {
   return true;
 }
 
+/** The anatomy name a mesh carries (e.g. 'Humerus.l'), so saved marks name the structure, not the file chunk. */
+function meshName(object: THREE.Object3D): string {
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    const anatomy = current.userData.anatomy;
+    if (typeof anatomy === 'string' && anatomy) return anatomy;
+    current = current.parent;
+  }
+  return object.name || regionOf(object);
+}
+
+const round = (n: number) => Math.round(n * 10000) / 10000;
+
 export type BodyPicker = MutableRefObject<
-  ((x: number, y: number, viewWidth: number, viewHeight: number) => string | null) | null
+  ((x: number, y: number, viewWidth: number, viewHeight: number) => BodyHit | null) | null
 >;
 
 export function AtlasBody({
@@ -110,6 +124,7 @@ export function AtlasBody({
   onError,
   visible,
   picker,
+  pin,
 }: {
   zoom: number;
   turn: number;
@@ -121,9 +136,13 @@ export function AtlasBody({
   onError?: (message: string) => void;
   visible: boolean;
   picker?: BodyPicker;
+  /** A saved 3D mark to pin on the body. It stays on the tapped spot as the view turns and zooms. */
+  pin?: BodyMark;
 }) {
   const pose = useRef<Pose>({ zoom, turn, scroll, slide, layers: selectedLayers(layer) });
   pose.current = { zoom, turn, scroll, slide, layers: selectedLayers(layer) };
+  const pinRef = useRef(pin);
+  pinRef.current = pin;
   const alive = useRef(true);
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
@@ -249,11 +268,51 @@ export function AtlasBody({
         pointer.y = -(y / viewHeight) * 2 + 1;
         raycaster.setFromCamera(pointer, camera);
         const hits = raycaster.intersectObjects(scene.children, true);
-        const hit = hits.find((item) => (item.object as THREE.Mesh).isMesh && isShown(item.object));
+        const hit = hits.find(
+          (item) => (item.object as THREE.Mesh).isMesh && !item.object.userData.pin && isShown(item.object),
+        );
         selectedMesh = hit ? (hit.object as THREE.Mesh) : null;
-        return hit ? partLabel(hit.object) : null;
+        if (!hit) return null;
+        // The body's roots are never moved (the camera is), so world space is the model's own space.
+        const normal = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : null;
+        // Materials are double-sided, so a hit can land on a back face; point the normal back toward the viewer.
+        if (normal && normal.dot(raycaster.ray.direction) > 0) normal.negate();
+        return {
+          label: partLabel(hit.object),
+          mark: {
+            mesh: meshName(hit.object),
+            point: { x: round(hit.point.x), y: round(hit.point.y), z: round(hit.point.z) },
+            ...(normal ? { normal: { x: round(normal.x), y: round(normal.y), z: round(normal.z) } } : {}),
+          },
+        };
       };
     }
+
+    // Saved-mark pin: a marker dot with a white rim, drawn over the body so a mark on a deeper layer still shows.
+    const pinGroup = new THREE.Group();
+    const pinDot = (color: string, radius: number, order: number) => {
+      const dot = new THREE.Mesh(
+        new THREE.SphereGeometry(radius, 16, 12),
+        new THREE.MeshBasicMaterial({ color, depthTest: false, depthWrite: false, transparent: true }),
+      );
+      dot.renderOrder = order;
+      dot.userData.pin = true;
+      return dot;
+    };
+    pinGroup.add(pinDot(colors.white, 1.45, 998), pinDot(colors.marker, 1, 999));
+    pinGroup.visible = false;
+    scene.add(pinGroup);
+    let pinRadius = 0.012;
+    const lift = new THREE.Vector3();
+    const placePin = () => {
+      const mark = pinRef.current;
+      pinGroup.visible = Boolean(mark);
+      if (!mark) return;
+      pinGroup.position.set(mark.point.x, mark.point.y, mark.point.z);
+      if (mark.normal) pinGroup.position.add(lift.set(mark.normal.x, mark.normal.y, mark.normal.z).multiplyScalar(pinRadius));
+      // Keep the pin about the same size on screen as the camera zooms in.
+      pinGroup.scale.setScalar(pinRadius / Math.max(pose.current.zoom, 1));
+    };
 
     const paint = (root: THREE.Object3D, atlasLayer: AtlasLayer, visible: ReadonlySet<AtlasLayer>) => {
       const deeper = ORDER.slice(ORDER.indexOf(atlasLayer) + 1).some((item) => visible.has(item));
@@ -354,6 +413,7 @@ export function AtlasBody({
       if (!alive.current) return;
       frame = requestAnimationFrame(loop);
       apply();
+      placePin();
       frameCamera();
       renderer.render(scene, camera);
       gl.endFrameEXP();
@@ -399,6 +459,7 @@ export function AtlasBody({
       home.above = half + size.y * 0.42;
       home.below = half + size.y * 0.12;
       home.side = (home.above + home.below) / 2;
+      pinRadius = size.y * 0.008;
       frameCamera();
       onReady?.();
 

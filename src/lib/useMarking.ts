@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { TURN_RANGE, ZOOM_RANGE } from '@/components/AnatomyCanvas';
 import { describeLocation } from '@/lib/anatomy';
 import { layerDepth } from '@/lib/format';
-import type { Layer, Point } from '@/lib/types';
+import type { BodyHit, Layer, Point } from '@/lib/types';
 import { useSomaStore } from '@/store/useSomaStore';
 
 const ORDER: Layer[] = ['skin', 'muscles', 'bones'];
@@ -56,7 +56,9 @@ export function useMarking() {
     clearDrawing: () => updateDraft({ strokes: [], demoArea: false }),
     marks,
     status,
-    onMark: (p: Point) => updateDraft({ mark: p, location: describeLocation(p) }),
+    // A flat tap (no 3D hit) clears any earlier 3D mark, so an edit can't keep a stale point.
+    onMark: (p: Point, hit?: BodyHit) =>
+      updateDraft({ mark: p, mark3d: hit?.mark, location: hit?.label ?? describeLocation(p) }),
     onStroke: (stroke: Point[]) =>
       updateDraft({
         strokes: [...draft.strokes, stroke],

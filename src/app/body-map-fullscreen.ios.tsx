@@ -98,6 +98,7 @@ export default function FullScreenAnatomy() {
             labels={{ top: canvasHeight * 0.47, rLeft: 29, lRight: 32, weight: 'medium' }}
             numbered
             mark={draft.mark}
+            mark3d={draft.mark3d}
             strokes={draft.strokes}
             demoArea={draft.demoArea}
             mode={m.mode}

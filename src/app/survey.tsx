@@ -132,6 +132,7 @@ export default function SymptomSurvey() {
             height={320}
             background={colors.sand}
             mark={draft.mark}
+            mark3d={draft.mark3d}
             strokes={draft.strokes}
             demoArea={draft.demoArea}
           />
