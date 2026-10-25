@@ -15,7 +15,7 @@ export function PageIntro({
   before,
   children,
 }) {
-  const line = subtitle === 'Record, track, share' ? null : subtitle;
+  const line = subtitle === 'Record, track, share' || subtitle === 'View | Edit | Share' ? null : subtitle;
   return (
     <View style={{ gap }}>
       {before}

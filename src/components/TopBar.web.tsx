@@ -77,6 +77,7 @@ export function TopBar({ active }: { active?: TopBarItem }) {
     const place = () => {
       syncDraw();
       findLabel('Record, track, share')?.remove();
+      findLabel('View | Edit | Share')?.remove();
 
       const closing = findLabel('Your body. Your story. Your choice to share.');
       closing?.parentElement?.remove();

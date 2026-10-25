@@ -1,7 +1,9 @@
+import { usePathname } from 'expo-router';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { TURN_RANGE, ZOOM_RANGE } from '@/components/AnatomyCanvas';
 import { describeLocation } from '@/lib/anatomy';
+import { rememberPose, requestFigureReset, shouldResetFigure } from '@/lib/body-pose';
 import { clearDrawn, getDrawnPart, keepMarkedLocation, selectDrawn, setDrawMode, subscribeDraw } from '@/lib/draw-selection';
 import { layerDepth } from '@/lib/format';
 import type { Layer, Point } from '@/lib/types';
@@ -19,6 +21,20 @@ export function useMarking() {
   const [turn, setTurn] = useState(0);
   const drawnPart = useSyncExternalStore(subscribeDraw, getDrawnPart, getDrawnPart);
   const markedLocation = useRef<string | null>(null);
+  const pathname = usePathname();
+  const previousPath = useRef(pathname);
+
+  useEffect(() => {
+    const from = previousPath.current;
+    previousPath.current = pathname;
+    if (!shouldResetFigure(from, pathname)) return;
+    setZoom(1);
+    setTurn(0);
+    setRotating(false);
+    clearDrawn();
+    rememberPose({ viewZoom: 1, viewTurn: 0, viewScroll: 0, viewSlide: 0, highlightedPart: null, highlightDraw: false });
+    requestFigureReset();
+  }, [pathname]);
 
   useEffect(() => {
     setDrawMode(mode === 'draw');

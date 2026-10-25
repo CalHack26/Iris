@@ -15,6 +15,7 @@ import SymptomHalo44 from '@/assets/icons/symptom-halo-44.svg';
 import SymptomHalo from '@/assets/icons/symptom-halo.svg';
 import SymptomLocation from '@/assets/icons/symptom-location.svg';
 import { coverRect, FRONT_IMAGE, frontToSaved, SAVED_IMAGE } from '@/lib/anatomy';
+import { getFigureReset, readPose, rememberPose, subscribeFigureReset, type SavedPose } from '@/lib/body-pose';
 import { clearDrawn, getDrawnPart, getMarkedLocation, selectDrawn, subscribeDraw } from '@/lib/draw-selection';
 import type { Layer, Point } from '@/lib/types';
 import { useSomaStore } from '@/store/useSomaStore';
@@ -96,8 +97,14 @@ export function AnatomyCanvas({
   const pathname = usePathname();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const draftLayer = useSomaStore((s) => s.draft.layer);
-  const recordLayer = useSomaStore((s) => (id ? s.records.find((r) => r.id === id)?.layer : undefined));
+  const draftPose = useSomaStore((s) => s.draft as SavedPose);
+  const recordPose = useSomaStore((s) =>
+    id ? (s.records.find((r) => r.id === id) as (SavedPose & { layer?: Layer }) | undefined) : undefined,
+  );
+  const recordLayer = recordPose?.layer;
   const layer: Layer = pathname.includes('/record/') && recordLayer ? recordLayer : draftLayer;
+  const holding = mode === 'view' || pathname.includes('/record/');
+  const frozen = holding ? readPose(pathname.includes('/record/') ? recordPose : draftPose) : null;
 
   const [width, setWidth] = useState(0);
   const [modelReady, setModelReady] = useState(false);
@@ -107,6 +114,8 @@ export function AnatomyCanvas({
   const [markedPart, setMarkedPart] = useState<string | null>(null);
   const [fingerStroke, setFingerStroke] = useState<Point[]>([]);
   const drawnPart = useSyncExternalStore(subscribeDraw, getDrawnPart, getDrawnPart);
+  const figureReset = useSyncExternalStore(subscribeFigureReset, getFigureReset, getFigureReset);
+  const seenReset = useRef(figureReset);
   const pinchStart = useRef(zoom);
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
@@ -143,6 +152,21 @@ export function AnatomyCanvas({
   }, [mode]);
 
   useEffect(() => {
+    if (holding) return;
+    rememberPose({ viewZoom: zoom, viewTurn: turn, viewScroll: scroll, viewSlide: slide });
+  }, [holding, zoom, turn, scroll, slide]);
+
+  useEffect(() => {
+    if (seenReset.current === figureReset) return;
+    seenReset.current = figureReset;
+    if (holding) return;
+    setScroll(0);
+    setSlide(0);
+    setMarkedPart(null);
+    setFingerStroke([]);
+  }, [figureReset, holding]);
+
+  useEffect(() => {
     const onWheel = (event: WheelEvent) => {
       if (mode === 'draw') return;
       const node = frameRef.current as unknown as HTMLElement | null;
@@ -168,8 +192,10 @@ export function AnatomyCanvas({
   }, [mode]);
 
   const img = IMAGES[image];
+  const keepSelection = Boolean(frozen);
+  const pinImage = keepSelection ? IMAGES.front : img;
   const box = width ? (imageBox?.(width, height) ?? { left: 0, top: 0, width, height }) : null;
-  const fit = box ? coverRect(box, img.size) : null;
+  const fit = box ? coverRect(box, pinImage.size) : null;
   const rect: Rect | null = fit && box ? { ...fit, left: fit.left + box.left, top: fit.top + box.top } : null;
 
   const toImage = (x: number, y: number): Point | null => {
@@ -178,7 +204,7 @@ export function AnatomyCanvas({
     return p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1 ? p : null;
   };
   const place = (p: Point) => {
-    const q = image === 'saved' ? frontToSaved(p) : p;
+    const q = image === 'saved' && !keepSelection ? frontToSaved(p) : p;
     return rect ? { x: q.x * rect.width, y: q.y * rect.height } : { x: 0, y: 0 };
   };
 
@@ -187,7 +213,7 @@ export function AnatomyCanvas({
     const part = picker.current?.(x, y, width, height);
     if (part) {
       selectDrawn(part);
-      useSomaStore.getState().updateDraft({ location: part });
+      rememberPose({ location: part, highlightedPart: part, highlightDraw: true });
     }
   };
 
@@ -207,7 +233,7 @@ export function AnatomyCanvas({
       if (!(modelReady && !modelFailed)) return;
       const part = picker.current?.(e.x, e.y, width, height);
       setMarkedPart(part);
-      if (part) useSomaStore.getState().updateDraft({ location: part });
+      if (part) rememberPose({ location: part, highlightedPart: part, highlightDraw: false });
     },
   });
 
@@ -304,7 +330,7 @@ export function AnatomyCanvas({
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
   const showMark = mode !== 'draw';
   const allStrokes = showMark ? strokes : [];
-  const placed = showMark && mark ? place(mark) : null;
+  const placed = showMark && mark && !pathname.includes('/record/') ? place(mark) : null;
   const Halo = numbered ? SymptomHalo44 : SymptomHalo;
   const haloSize = numbered ? 44 : 42;
 
@@ -319,16 +345,16 @@ export function AnatomyCanvas({
       onLayout={onLayout}>
       {modelFailed ? null : (
         <AtlasBody
-          zoom={zoom}
-          turn={turn}
-          scroll={scroll}
-          slide={slide}
+          zoom={frozen ? frozen.zoom : zoom}
+          turn={frozen ? frozen.turn : turn}
+          scroll={frozen ? frozen.scroll : scroll}
+          slide={frozen ? frozen.slide : slide}
           layer={layer}
           background={background}
           visible={modelReady}
           picker={picker}
-          highlight={mode === 'draw' ? drawnPart : markedPart}
-          drawHighlight={mode === 'draw'}
+          highlight={frozen ? frozen.highlightedPart : mode === 'draw' ? drawnPart : markedPart}
+          drawHighlight={frozen ? frozen.highlightDraw : mode === 'draw'}
           onReady={() => setModelReady(true)}
           onError={() => setModelFailed(true)}
         />
