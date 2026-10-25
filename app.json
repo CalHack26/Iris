@@ -8,7 +8,8 @@
     "scheme": "soma",
     "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.prishabobde.soma"
     },
     "android": {
       "adaptiveIcon": {
@@ -33,7 +34,8 @@
           "imageWidth": 76
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
