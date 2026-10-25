@@ -1,6 +1,6 @@
 # Iris
 
-Iris is an Expo and React Native mobile prototype for recording symptoms, viewing symptom history, and preparing a concise report to share with a clinician. It also includes a prototype symptom-translation screen and an optional Supabase backend for syncing app records and wearable sensor data.
+Iris is an Expo and React Native mobile prototype for recording symptoms, viewing symptom history, and preparing a concise report to share with a clinician. It also includes a symptom-translation screen and an optional Supabase backend for syncing app records and wearable sensor data.
 
 > **Health notice:** Iris is a tracking and communication aid, not a medical device. It does not diagnose, treat, or replace professional medical advice. Review records and generated summaries for accuracy before sharing them with a clinician.
 
@@ -13,7 +13,8 @@ Iris is an Expo and React Native mobile prototype for recording symptoms, viewin
 - Create and share a clinician-oriented PDF summary from marked-pain records.
 - Optionally look up potential disease matches in the Monarch Knowledge Graph from the Report tab.
 - View notifications and wearable data when connected to the optional Supabase backend.
-- Explore the Translate screen, which currently contains a design example and a lightweight keyword-extraction prototype.
+- Translate dictated or typed symptoms to English and review extracted clinical keywords.
+- Dictate symptoms with your device keyboard and translate entered text to English using MyMemory.
 
 
 ## Technology
@@ -151,6 +152,8 @@ The example sends readings on a five-second interval and posts a touch event. Th
 ## Privacy and safety
 
 Symptom notes and health-related data are sensitive. Use demo data for development; only connect real data to a backend you control and have configured with appropriate authentication, access policies, retention, and security. This prototype does not promise clinical accuracy or production-grade security.
+
+The Translate screen uses your device keyboard for speech dictation; the app does not record audio. When translating from a non-English language, entered text is sent to MyMemory's public translation API, which may log requests and has a free anonymous usage limit of 5,000 characters per day. Avoid entering identifying details.
 
 The optional Monarch lookup requires an explicit tap and sends up to three generalized body-location terms to Monarch's public API. It does not send symptom notes or personal details. Returned knowledge-graph associations are not diagnoses or estimates of personal risk.
 

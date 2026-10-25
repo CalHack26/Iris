@@ -1,7 +1,7 @@
 import * as Clipboard from 'expo-clipboard';
 import * as Speech from 'expo-speech';
-import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Pressable, StyleSheet, TextInput, type TextInputInstance, View } from 'react-native';
 
 import ArrowDownWhite from '@/assets/icons/arrow-down-white.svg';
 import ChevronDown from '@/assets/icons/chevron-down.svg';
@@ -16,7 +16,7 @@ import { PillButton } from '@/components/PillButton';
 import { Screen, Section } from '@/components/Screen';
 import { Txt } from '@/components/Txt';
 import { TRANSLATION_EXAMPLE } from '@/data/seed';
-import { LANGUAGES, SPEECH_CODE, translateSymptom, type Language } from '@/lib/translate';
+import { LANGUAGES, SPEECH_CODE, translateSymptom, translateToEnglish, type Language } from '@/lib/translate';
 import { colors, fonts, radii } from '@/theme/tokens';
 
 export default function SymptomTranslation() {
@@ -25,9 +25,15 @@ export default function SymptomTranslation() {
   const [text, setText] = useState(TRANSLATION_EXAMPLE.source);
   const [result, setResult] = useState(() => translateSymptom(TRANSLATION_EXAMPLE.source, 'French'));
   const [copied, setCopied] = useState(false);
-  const [listening, setListening] = useState(false);
+  const [translating, setTranslating] = useState(false);
+  const [translationError, setTranslationError] = useState('');
+  const input = useRef<TextInputInstance>(null);
 
-  const nextLanguage = () => setSource(LANGUAGES[(LANGUAGES.indexOf(source) + 1) % LANGUAGES.length]);
+  const nextLanguage = () => {
+    setSource(LANGUAGES[(LANGUAGES.indexOf(source) + 1) % LANGUAGES.length]);
+    setResult({ english: '', keywords: [], connected: false });
+    setTranslationError('');
+  };
   const speak = (words: string) => {
     Speech.stop();
     Speech.speak(words, { language: SPEECH_CODE.English });
@@ -59,13 +65,13 @@ export default function SymptomTranslation() {
               ]}
             />
             <PillButton
-              label={listening ? 'Stop' : 'Speak'}
+              label="Dictate"
               icon={Mic17}
               height={44}
               paddingH={16}
               onPress={() => {
                 setMode('voice');
-                setListening((l) => !l);
+                input.current?.focus();
               }}
             />
           </View>
@@ -74,39 +80,72 @@ export default function SymptomTranslation() {
               In your own words
             </Txt>
             {mode === 'voice' ? (
-              <Txt size={15} color={colors.muted} lh={1.5}>
-                {listening
-                  ? 'Listening… Voice transcription isn’t connected yet, so switch to Type to enter your words.'
-                  : 'Tap Speak to talk about how you feel.'}
+              <Txt size={11} color={colors.muted} lh={1.45}>
+                Set your keyboard’s dictation language to {source}, then tap its microphone. Your keyboard handles
+                dictation and may use its own speech service; this app does not record audio.
               </Txt>
-            ) : (
-              <TextInput
-                value={text}
-                onChangeText={setText}
-                multiline
-                placeholder="Describe how you feel, in any language."
-                placeholderTextColor={colors.muted}
-                style={styles.input}
-                accessibilityLabel="Your words"
-              />
-            )}
+            ) : null}
+            <TextInput
+              ref={input}
+              value={text}
+              onChangeText={(value) => {
+                setText(value);
+                setResult({ english: '', keywords: [], connected: false });
+                setTranslationError('');
+              }}
+              multiline
+              placeholder="Describe how you feel, in any language."
+              placeholderTextColor={colors.muted}
+              style={styles.input}
+              accessibilityLabel="Your words"
+            />
           </View>
           <View style={styles.row}>
-            <PillButton label="Clear" height={44} paddingH={16} flex onPress={() => setText('')} />
             <PillButton
-              label="Translate"
+              label="Clear"
+              height={44}
+              paddingH={16}
+              flex
+              onPress={() => {
+                setText('');
+                setTranslationError('');
+              }}
+            />
+            <PillButton
+              label={translating ? 'Translating…' : 'Translate'}
               icon={ArrowDownWhite}
               variant="primary"
               height={44}
               paddingH={16}
               flex
-              disabled={!text.trim()}
-              onPress={() => {
-                setResult(translateSymptom(text, source));
-                setCopied(false);
+              disabled={!text.trim() || translating}
+              onPress={async () => {
+                setTranslating(true);
+                setTranslationError('');
+                setResult({ english: '', keywords: [], connected: false });
+                try {
+                  const english = await translateToEnglish(text, source);
+                  setResult(translateSymptom(english, 'English'));
+                  setCopied(false);
+                } catch (error) {
+                  setTranslationError(error instanceof Error ? error.message : String(error));
+                } finally {
+                  setTranslating(false);
+                }
               }}
             />
           </View>
+          {translationError ? (
+            <Txt size={12} color={colors.marker} lh={1.45} accessibilityRole="alert">
+              {translationError}
+            </Txt>
+          ) : null}
+          {source !== 'English' ? (
+            <InfoNote icon={Info16} tone="sand" size={11}>
+              Translation sends text to MyMemory’s online service, which may log requests. Avoid names or identifying details.
+              Free anonymous limit: 5,000 characters per day.
+            </InfoNote>
+          ) : null}
         </Card>
 
         <Card>
@@ -123,11 +162,6 @@ export default function SymptomTranslation() {
             <Txt size={15} lh={1.5}>
               {result.english || '—'}
             </Txt>
-            {!result.connected ? (
-              <Txt size={11} color={colors.muted} lh={1.45}>
-                Live translation isn’t connected yet, so your original words are shown.
-              </Txt>
-            ) : null}
             <View style={styles.actions}>
               <PillButton
                 label={copied ? 'Copied' : 'Copy'}

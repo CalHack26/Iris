@@ -32,10 +32,7 @@ const KEYWORDS: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/\bno numbness|no tingling|numbness or tingling/i, () => 'No numbness or tingling reported'],
 ];
 
-/**
- * Stand-in for an AI translation service. It returns the design's worked example verbatim and otherwise passes the
- * text through, extracting clinical keywords with simple rules. `connected: false` lets the UI say so.
- */
+/** Extract useful English clinical keywords from translated text. */
 export function translateSymptom(text: string, from: Language) {
   const trimmed = text.trim();
   if (trimmed === TRANSLATION_EXAMPLE.source) {
@@ -47,4 +44,40 @@ export function translateSymptom(text: string, from: Language) {
     return m ? [label(m)] : [];
   });
   return { english, keywords, connected: from === 'English' };
+}
+
+const SOURCE_CODE: Record<Language, string> = {
+  French: 'fr',
+  Spanish: 'es',
+  Vietnamese: 'vi',
+  Mandarin: 'zh-CN',
+  English: 'en',
+};
+
+type TranslationResponse = {
+  responseStatus?: number;
+  responseDetails?: string;
+  quotaFinished?: boolean;
+  responseData?: { translatedText?: string };
+};
+
+/** Translate text to English with MyMemory's free, anonymous translation endpoint. */
+export async function translateToEnglish(text: string, from: Language): Promise<string> {
+  const trimmed = text.trim();
+  if (!trimmed) throw new Error('Enter or dictate a symptom before translating.');
+  if (from === 'English') return trimmed;
+  const encodedLength = encodeURIComponent(trimmed).replace(/%[0-9A-F]{2}/gi, 'U').length;
+  if (encodedLength > 500) throw new Error('Please keep each translation under 500 bytes.');
+
+  const query = new URLSearchParams({ q: trimmed, langpair: `${SOURCE_CODE[from]}|en` });
+  const response = await fetch(`https://api.mymemory.translated.net/get?${query.toString()}`);
+  if (!response.ok) throw new Error(`Translation service returned ${response.status}.`);
+
+  const result = (await response.json()) as TranslationResponse;
+  if (result.quotaFinished) throw new Error('The free translation service has reached its daily limit.');
+  const english = result.responseData?.translatedText?.trim();
+  if (result.responseStatus !== 200 || !english) {
+    throw new Error(result.responseDetails || 'The translation service returned no translation.');
+  }
+  return english;
 }
