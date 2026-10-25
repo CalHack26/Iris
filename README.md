@@ -24,6 +24,10 @@ Iris is an Expo and React Native mobile prototype for recording symptoms, viewin
 - Zustand and AsyncStorage for local app state and persistence
 - Supabase JS for optional authentication, record sync, notifications, and wearable readings
 - Supabase Edge Function and ESP32 Arduino example for wearable ingestion
+- Three.js for the 3D body
+- Figma (interface design)
+- Z-Anatomy models, prepared in Blender (CC BY-SA)
+
 
 ## Requirements
 
