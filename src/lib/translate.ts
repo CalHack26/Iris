@@ -14,7 +14,7 @@ export const SPEECH_CODE: Record<Language, string> = {
 
 const KEYWORDS: [RegExp, (m: RegExpMatchArray) => string][] = [
   [
-    /\b(left|right)?\s*(?:front of (?:my|the)\s+(left|right)?\s*)?(shoulder|knee|neck|chest|hip|elbow|wrist|ankle|back|head|stomach|abdomen)\b/i,
+    /\b(left|right)?\s*(?:front of (?:my|the)\s+(left|right)?\s*)?(shoulder|knee|neck|chest|hip|elbow|wrist|ankle|back|head|stomach|abdomen|arm|forearm|hand|finger|leg|thigh|calf|foot|toe|jaw|face|eye|ear|throat)\b/i,
     (m) => {
       const side = m[1] || m[2];
       const part = m[3].toLowerCase();
@@ -22,15 +22,59 @@ const KEYWORDS: [RegExp, (m: RegExpMatchArray) => string][] = [
       return `${side ? `${side[0].toUpperCase()}${side.slice(1).toLowerCase()} ` : ''}${anterior}${part}`.replace(/^./, (c) => c.toUpperCase());
     },
   ],
+  [/\b(pain|painful|hurt|hurts|hurting)\b/i, () => 'Pain'],
   [/\b(dull|ache|aching)\b/i, () => 'Dull aching pain'],
-  [/\bsharp|stabbing\b/i, () => 'Sharp pain'],
+  [/\b(sharp|stabbing)\b/i, () => 'Sharp pain'],
   [/\bburn/i, () => 'Burning sensation'],
   [/\bthrob|puls/i, () => 'Throbbing pain'],
-  [/\bheadache\b/i, () => 'Headache'],
+  [/\b(headache|migraine)\b/i, () => 'Headache'],
   [/worse.*(rais|lift)\w*\s+(my\s+)?arm|(rais|lift)\w*\s+(my\s+)?arm.*worse/i, () => 'Worse with arm elevation'],
   [/\bscreen\b/i, () => 'Associated with screen use'],
-  [/\bno numbness|no tingling|numbness or tingling/i, () => 'No numbness or tingling reported'],
+  [/\b(numbness|numb|tingling|pins and needles)\b/i, () => 'Numbness or tingling'],
+  [/\b(swelling|swollen|inflammation)\b/i, () => 'Swelling'],
+  [/\b(stiffness|stiff)\b/i, () => 'Stiffness'],
+  [/\b(fatigue|fatigued|tired|exhausted|low energy)\b/i, () => 'Fatigue'],
+  [/\b(fever|febrile|high temperature)\b/i, () => 'Fever'],
+  [/\b(chills|chilly|shivering)\b/i, () => 'Chills'],
+  [/\b(nausea|nauseated|queasy|sick to my stomach)\b/i, () => 'Nausea'],
+  [/\b(vomiting|vomit|threw up|throwing up)\b/i, () => 'Vomiting'],
+  [/\b(diarrhea|loose stools)\b/i, () => 'Diarrhea'],
+  [/\b(constipation|constipated)\b/i, () => 'Constipation'],
+  [/\b(dizziness|dizzy|lightheaded|vertigo)\b/i, () => 'Dizziness'],
+  [/\b(fainting|fainted|passed out|passing out)\b/i, () => 'Fainting'],
+  [/\b(shortness of breath|short of breath|breathless|difficulty breathing)\b/i, () => 'Shortness of breath'],
+  [/\b(cough|coughing)\b/i, () => 'Cough'],
+  [/\b(palpitations|heart racing|racing heart)\b/i, () => 'Palpitations'],
+  [/\b(weakness|weak)\b/i, () => 'Weakness'],
+  [/\b(rash|hives|skin eruption)\b/i, () => 'Rash'],
+  [/\b(itching|itchy)\b/i, () => 'Itching'],
+  [/\b(bruising|bruises|bruise)\b/i, () => 'Bruising'],
+  [/\b(cramp|cramping|muscle spasm|spasms)\b/i, () => 'Muscle cramps or spasms'],
+  [/\b(sore throat|throat pain)\b/i, () => 'Sore throat'],
+  [/\b(runny nose|nasal congestion|stuffy nose|congestion)\b/i, () => 'Nasal congestion'],
+  [/\b(wheezing|wheeze)\b/i, () => 'Wheezing'],
+  [/\b(heartburn|acid reflux)\b/i, () => 'Heartburn'],
+  [/\b(painful urination|burning urination|pain when urinating)\b/i, () => 'Painful urination'],
+  [/\b(frequent urination|urinating frequently)\b/i, () => 'Frequent urination'],
+  [/\b(blurred vision|blurry vision|vision changes)\b/i, () => 'Vision changes'],
+  [/\b(loss of appetite|poor appetite|increased appetite)\b/i, () => 'Appetite change'],
+  [/\b(insomnia|trouble sleeping|poor sleep)\b/i, () => 'Sleep disturbance'],
 ];
+
+function hasNonNegatedMatch(text: string, pattern: RegExp) {
+  const matcher = new RegExp(pattern.source, `${pattern.flags.replace('g', '')}g`);
+  let match: RegExpExecArray | null;
+  while ((match = matcher.exec(text))) {
+    const sentenceStart = Math.max(
+      text.lastIndexOf('.', match.index),
+      text.lastIndexOf('!', match.index),
+      text.lastIndexOf('?', match.index),
+    );
+    const prefix = text.slice(sentenceStart + 1, match.index).split(/\b(?:but|however|although|yet)\b/i).pop() || '';
+    if (!/\b(?:no|not|without|denies|denied|never)\b(?:\s+\w+){0,4}\s*$/i.test(prefix)) return match;
+  }
+  return null;
+}
 
 /** Extract useful English clinical keywords from translated text. */
 export function translateSymptom(text: string, from: Language) {
@@ -39,10 +83,13 @@ export function translateSymptom(text: string, from: Language) {
     return { english: TRANSLATION_EXAMPLE.english, keywords: TRANSLATION_EXAMPLE.keywords, connected: true };
   }
   const english = trimmed;
-  const keywords = KEYWORDS.flatMap(([re, label]) => {
-    const m = english.match(re);
+  const keywords = [...new Set(KEYWORDS.flatMap(([re, label]) => {
+    const m = hasNonNegatedMatch(english, re);
     return m ? [label(m)] : [];
-  });
+  }))];
+  if (/\b(?:no|without|denies|denied)\s+(?:any\s+)?(?:numbness|tingling)\b/i.test(english)) {
+    keywords.push('No numbness or tingling reported');
+  }
   return { english, keywords, connected: from === 'English' };
 }
 

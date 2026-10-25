@@ -16,6 +16,7 @@ import { PillButton } from '@/components/PillButton';
 import { Screen, Section } from '@/components/Screen';
 import { Txt } from '@/components/Txt';
 import { TRANSLATION_EXAMPLE } from '@/data/seed';
+import { startDictation } from '@/lib/dictate';
 import { LANGUAGES, SPEECH_CODE, translateSymptom, translateToEnglish, type Language } from '@/lib/translate';
 import { colors, fonts, radii } from '@/theme/tokens';
 
@@ -27,6 +28,7 @@ export default function SymptomTranslation() {
   const [copied, setCopied] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [translationError, setTranslationError] = useState('');
+  const [dictationMessage, setDictationMessage] = useState('');
   const input = useRef<TextInputInstance>(null);
 
   const nextLanguage = () => {
@@ -69,9 +71,27 @@ export default function SymptomTranslation() {
               icon={Mic17}
               height={44}
               paddingH={16}
-              onPress={() => {
+              onPress={async () => {
                 setMode('voice');
-                input.current?.focus();
+                setText('');
+                setResult({ english: '', keywords: [], connected: false });
+                setDictationMessage('Listening…');
+                setTranslationError('');
+                try {
+                  const transcript = await startDictation(SPEECH_CODE[source]);
+                  if (transcript) {
+                    setText(transcript);
+                    setResult({ english: '', keywords: [], connected: false });
+                    setDictationMessage('Speech transcribed. Review it before translating.');
+                  } else {
+                    input.current?.focus();
+                    setDictationMessage(`Tap your keyboard microphone to dictate in ${source}.`);
+                  }
+                } catch (error) {
+                  input.current?.focus();
+                  setDictationMessage('');
+                  setTranslationError(error instanceof Error ? error.message : String(error));
+                }
               }}
             />
           </View>
@@ -81,8 +101,8 @@ export default function SymptomTranslation() {
             </Txt>
             {mode === 'voice' ? (
               <Txt size={11} color={colors.muted} lh={1.45}>
-                Set your keyboard’s dictation language to {source}, then tap its microphone. Your keyboard handles
-                dictation and may use its own speech service; this app does not record audio.
+                {dictationMessage ||
+                  `Use Dictate to speak in ${source}. iOS uses the keyboard microphone; Android and supported browsers open speech recognition. The speech service may process audio; this app does not record it.`}
               </Txt>
             ) : null}
             <TextInput
@@ -92,6 +112,7 @@ export default function SymptomTranslation() {
                 setText(value);
                 setResult({ english: '', keywords: [], connected: false });
                 setTranslationError('');
+                setDictationMessage('');
               }}
               multiline
               placeholder="Describe how you feel, in any language."
@@ -108,7 +129,9 @@ export default function SymptomTranslation() {
               flex
               onPress={() => {
                 setText('');
+                setResult({ english: '', keywords: [], connected: false });
                 setTranslationError('');
+                setDictationMessage('');
               }}
             />
             <PillButton

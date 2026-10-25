@@ -14,7 +14,7 @@ Iris is an Expo and React Native mobile prototype for recording symptoms, viewin
 - Optionally look up potential disease matches in the Monarch Knowledge Graph from the Report tab.
 - View notifications and wearable data when connected to the optional Supabase backend.
 - Translate dictated or typed symptoms to English and review extracted clinical keywords.
-- Dictate symptoms with your device keyboard and translate entered text to English using MyMemory.
+- Dictate symptoms with Android's system speech recognizer, browser speech recognition where available, or your iOS keyboard microphone; translate entered text to English using MyMemory.
 
 
 ## Technology
