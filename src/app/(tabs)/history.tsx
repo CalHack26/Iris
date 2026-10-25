@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
@@ -16,12 +17,22 @@ import { Screen, Section } from '@/components/Screen';
 import { Txt } from '@/components/Txt';
 import { average, date, dateRange, dayMonth, feelingLabel, layerLabel, shortLocation, time } from '@/lib/format';
 import { fmtAvg, range, sampleLabels, severityTrend } from '@/lib/insights';
+import { APPOINTMENT_URL } from '@/lib/links';
 import type { SymptomRecord } from '@/lib/types';
 import { useSomaStore } from '@/store/useSomaStore';
 import { colors, radii } from '@/theme/tokens';
 
 const FILTERS = ['All records', 'Marked pain', 'Notes'] as const;
 type Filter = (typeof FILTERS)[number];
+
+/** Opens the hospital's booking page in an in-app browser; booking itself isn't built yet. */
+async function bookAppointment() {
+  try {
+    await WebBrowser.openBrowserAsync(APPOINTMENT_URL, { controlsColor: colors.accent, dismissButtonStyle: 'done' });
+  } catch (e) {
+    Alert.alert('Couldn’t open the booking site', e instanceof Error ? e.message : String(e));
+  }
+}
 
 export default function RecentTrends() {
   const records = useSomaStore((s) => s.records);
@@ -64,9 +75,7 @@ export default function RecentTrends() {
           height={48}
           paddingH={18}
           size={14}
-          onPress={() =>
-            Alert.alert('Make an appointment', 'Booking isn’t connected yet. Share your report with your clinician from the Report tab.')
-          }
+          onPress={bookAppointment}
         />
       </Section>
 
