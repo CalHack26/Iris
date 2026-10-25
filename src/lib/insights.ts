@@ -26,3 +26,9 @@ export const fmtAvg = (n: number) => oneDecimal(n);
 export function range(values: number[]) {
   return values.length ? ([Math.min(...values), Math.max(...values)] as const) : ([0, 0] as const);
 }
+
+/** Up to six evenly spaced records for a chart's date axis. */
+export function sampleLabels(chrono: SymptomRecord[]) {
+  if (chrono.length <= 6) return chrono;
+  return Array.from({ length: 6 }, (_, i) => chrono[Math.round((i * (chrono.length - 1)) / 5)]);
+}
