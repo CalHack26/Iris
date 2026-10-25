@@ -1,4 +1,5 @@
-import { router, type Href } from 'expo-router';
+import { router, useFocusEffect, type Href } from 'expo-router';
+import { useCallback } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import ArrowUpRight16 from '@/assets/icons/arrow-up-right-16.svg';
@@ -10,6 +11,7 @@ import { PageIntro } from '@/components/PageIntro';
 import { PillButton } from '@/components/PillButton';
 import { Screen, Section } from '@/components/Screen';
 import { Txt } from '@/components/Txt';
+import { refreshAlerts } from '@/lib/bootstrap';
 import { dayMonthLong, time } from '@/lib/format';
 import { useSomaStore } from '@/store/useSomaStore';
 import { colors } from '@/theme/tokens';
@@ -19,6 +21,14 @@ export default function Notifications() {
   const markRead = useSomaStore((s) => s.markNotificationRead);
   const discardEdit = useSomaStore((s) => s.discardEdit);
   const unread = notifications.filter((n) => !n.read).length;
+
+  // Pattern alerts have no live subscription, so pull the latest each time the screen opens.
+  useFocusEffect(
+    useCallback(() => {
+      void refreshAlerts();
+    }, []),
+  );
+
   const groupDate = notifications[0] ? new Date(notifications[0].at) : new Date();
   const isToday = groupDate.toDateString() === new Date().toDateString();
 

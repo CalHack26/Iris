@@ -12,7 +12,9 @@ import { Screen, Section } from '@/components/Screen';
 import { Txt } from '@/components/Txt';
 import { SENSOR_END, sensorSeries, SENSORS, type SensorRange } from '@/data/seed';
 import { dateRange, dayMonth } from '@/lib/format';
+import { bucketReadings, endOfToday } from '@/lib/sensors';
 import type { SensorKind } from '@/lib/types';
+import { useSomaStore } from '@/store/useSomaStore';
 import { colors } from '@/theme/tokens';
 
 const DAY_MS = 86_400_000;
@@ -22,8 +24,11 @@ const KINDS: SensorKind[] = ['heartRate', 'temperature', 'respiratory'];
 export default function SensorData() {
   const [period, setPeriod] = useState<SensorRange>('week');
   const [offset, setOffset] = useState(0);
+  const readings = useSomaStore((s) => s.readings);
 
-  const end = new Date(SENSOR_END.getTime() - offset * PERIOD_DAYS[period] * DAY_MS);
+  // Live wearable data runs up to today; without it the mock series ends on the design's date.
+  const anchor = readings.length ? endOfToday() : SENSOR_END;
+  const end = new Date(anchor.getTime() - offset * PERIOD_DAYS[period] * DAY_MS);
   const start = new Date(end.getTime() - (PERIOD_DAYS[period] - 1) * DAY_MS);
   const rangeLabel = period === 'day' ? `${dayMonth(end)} ${end.getFullYear()}` : dateRange(start, end);
   const mid = new Date((start.getTime() + end.getTime()) / 2);
@@ -72,7 +77,13 @@ export default function SensorData() {
       <Section index={3}>
         {KINDS.map((kind) => {
           const meta = SENSORS[kind];
-          const values = sensorSeries(kind, period, offset);
+          const live = bucketReadings(readings, kind, PERIOD_DAYS[period], end);
+          const values = live?.values ?? sensorSeries(kind, period, offset);
+          const lastIndex = live?.lastIndex ?? values.length - 1;
+          const latestLabel =
+            period === 'day'
+              ? `${String(lastIndex).padStart(2, '0')}:00`
+              : dayMonth(new Date(start.getTime() + lastIndex * DAY_MS));
           const fmt = (v: number) => v.toFixed(meta.decimals);
           const lo = Math.min(...values);
           const hi = Math.max(...values);
@@ -89,10 +100,10 @@ export default function SensorData() {
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 2 }}>
                   <Txt size={26} weight="medium">
-                    {fmt(values.at(-1)!)}
+                    {fmt(values[lastIndex])}
                   </Txt>
                   <Txt size={11} color={colors.muted}>
-                    {period === 'day' ? '23:00' : dayMonth(end)}
+                    {latestLabel}
                   </Txt>
                 </View>
               </View>
