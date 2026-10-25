@@ -59,7 +59,26 @@ export function TopBar({ active }: { active?: TopBarItem }) {
       return null;
     };
 
+    const buttonFor = (label: string) => {
+      const node = findLabel(label);
+      return (node?.closest('button, [role="button"]') as HTMLElement | null) ?? null;
+    };
+
+    const syncDraw = () => {
+      const drawing = Boolean(findLabel('✓ Draw'));
+      for (const label of ['Turn left', 'Turn right']) {
+        const button = buttonFor(label);
+        if (button) button.style.display = drawing ? 'none' : '';
+      }
+      const hint = findLabel('Scroll zooms')?.parentElement as HTMLElement | null;
+      if (hint) hint.style.display = drawing ? 'none' : '';
+    };
+
     const place = () => {
+      syncDraw();
+      findLabel('Record, track, share')?.remove();
+      findLabel('View | Edit | Share')?.remove();
+
       const closing = findLabel('Your body. Your story. Your choice to share.');
       closing?.parentElement?.remove();
 

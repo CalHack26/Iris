@@ -1,6 +1,9 @@
 import { useSomaStore } from '@/store/useSomaStore';
 
-import { refreshAlerts, startBackend } from './bootstrap.ts';
+import { refreshAlerts } from './bootstrap.ts';
+import { loadAlerts, loadRecentReadings, subscribeToReadings } from './data';
+import { isSupabaseConfigured, signInDemo } from './supabase';
+import { alertToNotification, pullRecords } from './sync';
 
 type WebsiteStore = {
   draft: { editingId?: string };
@@ -35,4 +38,37 @@ if (typeof window !== 'undefined' && typeof store.getState().discardEdit !== 'fu
   });
 }
 
-export { refreshAlerts, startBackend };
+type BackendStore = {
+  unsyncedIds?: string[];
+  syncRecord?: (id: string) => Promise<unknown>;
+  hydrateRemote?: (input: { records: unknown[]; notifications: unknown[] }) => void;
+  setReadings?: (readings: unknown[]) => void;
+  addReading?: (reading: unknown) => void;
+};
+
+/** Website startup. The store has no offline queue, so a missing list is skipped instead of mapped. */
+export function startBackend(): () => void {
+  if (!isSupabaseConfigured) return () => {};
+  let stopped = false;
+  let unsubscribe = () => {};
+
+  (async () => {
+    const userId = await signInDemo();
+    const store = useSomaStore.getState() as BackendStore;
+    const pending = store.unsyncedIds ?? [];
+    if (store.syncRecord) await Promise.all(pending.map((id) => store.syncRecord?.(id)));
+
+    const [records, alerts, readings] = await Promise.all([pullRecords(), loadAlerts(), loadRecentReadings(24 * 30)]);
+    if (stopped) return;
+    store.hydrateRemote?.({ records, notifications: (alerts ?? []).map(alertToNotification) });
+    store.setReadings?.(readings);
+    if (store.addReading) unsubscribe = subscribeToReadings(userId, store.addReading);
+  })().catch((e) => console.warn('[backend] using local data:', e));
+
+  return () => {
+    stopped = true;
+    unsubscribe();
+  };
+}
+
+export { refreshAlerts };
