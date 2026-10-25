@@ -96,6 +96,7 @@ export const useSomaStore = create<SomaState>()(
       name: 'soma-store',
       version: 1,
       storage: createJSONStorage(() => AsyncStorage),
+      migrate: (persisted) => persisted,
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<SomaState>;
         const next = { ...current, ...saved };
