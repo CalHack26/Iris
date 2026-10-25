@@ -15,7 +15,7 @@ import { PillButton } from '@/components/PillButton';
 import { Screen, Section } from '@/components/Screen';
 import { Txt } from '@/components/Txt';
 import { average, date, dateRange, dayMonth, feelingLabel, layerLabel, shortLocation, time } from '@/lib/format';
-import { fmtAvg, range, severityTrend } from '@/lib/insights';
+import { fmtAvg, range, sampleLabels, severityTrend } from '@/lib/insights';
 import type { SymptomRecord } from '@/lib/types';
 import { useSomaStore } from '@/store/useSomaStore';
 import { colors, radii } from '@/theme/tokens';
@@ -234,11 +234,6 @@ function RecordRow({ record }: { record: SymptomRecord }) {
 }
 
 /** Up to six evenly spaced date labels for the chart's x-axis. */
-function sampleLabels(chrono: SymptomRecord[]) {
-  if (chrono.length <= 6) return chrono;
-  return Array.from({ length: 6 }, (_, i) => chrono[Math.round((i * (chrono.length - 1)) / 5)]);
-}
-
 function summaryLine(records: SymptomRecord[]) {
   const marked = records.filter((r) => r.location);
   const n = records.length;
