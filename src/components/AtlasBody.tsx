@@ -1,6 +1,6 @@
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
@@ -15,6 +15,7 @@ import {
   showRegionChunk,
   type AtlasLayer,
 } from '@/atlas/body-model';
+import { meshLook, useRawWebglContext } from '@/atlas/web-view';
 import type { Layer } from '@/lib/types';
 
 const COLOR: Record<AtlasLayer, string> = {
@@ -150,64 +151,74 @@ export function AtlasBody({
   }, []);
 
   const onContextCreate = async (gl: ExpoWebGLRenderingContext) => {
-    const width = gl.drawingBufferWidth;
-    const height = gl.drawingBufferHeight;
-    const canvas = {
-      width,
-      height,
-      style: {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      clientWidth: width,
-      clientHeight: height,
-      getContext: () => gl,
-    };
-    const attributes = {
-      alpha: true,
-      antialias: true,
-      depth: true,
-      failIfMajorPerformanceCaveat: false,
-      powerPreference: 'default' as const,
-      premultipliedAlpha: true,
-      preserveDrawingBuffer: false,
-      stencil: true,
-      desynchronized: false,
-    };
-    const readAttributes = gl.getContextAttributes?.bind(gl);
-    gl.getContextAttributes = () => ({ ...attributes, ...(readAttributes?.() ?? {}) });
-    // Expo Go's context is marked WebGL 1. Three r170 rejects that class.
-    // Forward the methods, but report a prototype Three will accept.
-    const context = new Proxy(gl, {
-      getPrototypeOf() {
-        return Object.prototype;
-      },
-      get(target, prop) {
-        const value = Reflect.get(target, prop, target);
-        return typeof value === 'function' ? value.bind(target) : value;
-      },
-    });
-    const WebGL1 = globalThis.WebGLRenderingContext;
-    const previousHasInstance = WebGL1
-      ? Object.getOwnPropertyDescriptor(WebGL1, Symbol.hasInstance)
-      : undefined;
-    if (WebGL1) {
-      Object.defineProperty(WebGL1, Symbol.hasInstance, {
-        configurable: true,
-        value: () => false,
-      });
-    }
+    const webgl = gl as unknown as WebGL2RenderingContext;
+    const width = gl.drawingBufferWidth || webgl.canvas?.width || 1;
+    const height = gl.drawingBufferHeight || webgl.canvas?.height || 1;
     let renderer: THREE.WebGLRenderer;
-    try {
+    if (useRawWebglContext(Platform.OS)) {
       renderer = new THREE.WebGLRenderer({
-        canvas: canvas as unknown as HTMLCanvasElement,
-        context: context as unknown as WebGLRenderingContext,
+        canvas: webgl.canvas as HTMLCanvasElement,
+        context: webgl,
         antialias: true,
         alpha: true,
       });
-    } finally {
+    } else {
+      const canvas = {
+        width,
+        height,
+        style: {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        clientWidth: width,
+        clientHeight: height,
+        getContext: () => gl,
+      };
+      const attributes = {
+        alpha: true,
+        antialias: true,
+        depth: true,
+        failIfMajorPerformanceCaveat: false,
+        powerPreference: 'default' as const,
+        premultipliedAlpha: true,
+        preserveDrawingBuffer: false,
+        stencil: true,
+        desynchronized: false,
+      };
+      const readAttributes = gl.getContextAttributes?.bind(gl);
+      gl.getContextAttributes = () => ({ ...attributes, ...(readAttributes?.() ?? {}) });
+      // Expo Go's context is marked WebGL 1. Three r170 rejects that class.
+      // Forward the methods, but report a prototype Three will accept.
+      const context = new Proxy(gl, {
+        getPrototypeOf() {
+          return Object.prototype;
+        },
+        get(target, prop) {
+          const value = Reflect.get(target, prop, target);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+      const WebGL1 = globalThis.WebGLRenderingContext;
+      const previousHasInstance = WebGL1
+        ? Object.getOwnPropertyDescriptor(WebGL1, Symbol.hasInstance)
+        : undefined;
       if (WebGL1) {
-        if (previousHasInstance) Object.defineProperty(WebGL1, Symbol.hasInstance, previousHasInstance);
-        else delete WebGL1[Symbol.hasInstance];
+        Object.defineProperty(WebGL1, Symbol.hasInstance, {
+          configurable: true,
+          value: () => false,
+        });
+      }
+      try {
+        renderer = new THREE.WebGLRenderer({
+          canvas: canvas as unknown as HTMLCanvasElement,
+          context: context as unknown as WebGLRenderingContext,
+          antialias: true,
+          alpha: true,
+        });
+      } finally {
+        if (WebGL1) {
+          if (previousHasInstance) Object.defineProperty(WebGL1, Symbol.hasInstance, previousHasInstance);
+          else delete WebGL1[Symbol.hasInstance];
+        }
       }
     }
     renderer.setPixelRatio(1);
@@ -267,25 +278,26 @@ export function AtlasBody({
           materials.set(keyName, material);
         }
         mesh.material = material;
-        if (selectedMesh && mesh !== selectedMesh) {
+        const look = meshLook(Boolean(selectedMesh), mesh === selectedMesh);
+        if (look.kind === 'dim') {
           const dimKey = `${keyName}:dim`;
           let dim = materials.get(dimKey);
           if (!dim) {
             dim = material.clone();
             dim.transparent = true;
-            dim.opacity = 0.18;
+            dim.opacity = look.opacity;
             dim.depthWrite = false;
             materials.set(dimKey, dim);
           }
           mesh.material = dim;
-        } else if (mesh === selectedMesh) {
+        } else if (look.kind === 'highlight') {
           let highlight = mesh.userData.hi as THREE.MeshStandardMaterial | undefined;
           if (!highlight || highlight.userData.source !== material.uuid) {
             highlight = material.clone();
-            highlight.color.set('#fff1c9');
-            highlight.emissive.set('#ffb703');
-            highlight.emissiveIntensity = 0.85;
-            highlight.opacity = 1;
+            highlight.color.set(look.color);
+            highlight.emissive.set(look.emissive);
+            highlight.emissiveIntensity = look.intensity;
+            highlight.opacity = look.opacity;
             highlight.transparent = false;
             highlight.depthWrite = true;
             highlight.userData.source = material.uuid;

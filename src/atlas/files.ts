@@ -1,6 +1,8 @@
 import Constants from 'expo-constants';
 import { NativeModules, Platform } from 'react-native';
 
+import { atlasRequestPath } from '@/atlas/web-view';
+
 /** URLs for the phone atlas. The dev server serves these from public/atlas. */
 const FILE_NAMES = [
   'lod0-bone.glb',
@@ -46,5 +48,5 @@ function devOrigin(): string {
 }
 
 export function atlasUrl(file: AtlasFile): string {
-  return `${devOrigin()}/atlas/${file}`;
+  return `${devOrigin()}${atlasRequestPath(file)}`;
 }

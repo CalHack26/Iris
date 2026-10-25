@@ -123,8 +123,8 @@ export default function MarkAPain() {
         <View style={{ gap: 10 }}>
           <Txt size={12} color={colors.muted} lh={1.45}>
             {m.rotating
-              ? 'One finger slides the body. Two fingers turn it. Tap Rotate again to mark.'
-              : 'One finger slides the body. Two fingers turn it.'}
+              ? 'Drag turns the body. Scroll zooms. Tap Rotate again to mark.'
+              : 'Drag slides the body. Scroll zooms. Hold Shift and drag, or press Rotate, to turn it.'}
           </Txt>
           <View style={styles.row}>
             <PillButton label="Turn left" icon={ChevronLeft} paddingH={14} flex onPress={() => m.turnBy(-15)} />

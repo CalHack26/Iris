@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { useLocalSearchParams, usePathname } from 'expo-router';
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import {
   GestureDetector,
@@ -18,6 +18,21 @@ import { coverRect, FRONT_IMAGE, frontToSaved, SAVED_IMAGE } from '@/lib/anatomy
 import type { Layer, Point } from '@/lib/types';
 import { useSomaStore } from '@/store/useSomaStore';
 import { colors } from '@/theme/tokens';
+
+import {
+  dragSlide,
+  dragTurn,
+  dragTurns,
+  oneFingerMovesView,
+  pinchTurn as turnFromPinch,
+  pinchZoom,
+  tapNamesPart,
+  TURN_RANGE,
+  twoFingerTurns,
+  wheelChangesZoom,
+  wheelZoom,
+  ZOOM_RANGE,
+} from '@/atlas/web-view';
 
 import { AtlasBody } from './AtlasBody';
 import { useLockPageScroll } from './Screen';
@@ -53,9 +68,7 @@ type Props = {
   style?: StyleProp<ViewStyle>;
 };
 
-export const ZOOM_RANGE = [1, 6] as const;
-export const TURN_RANGE = [-180, 180] as const;
-const clamp = (v: number, [lo, hi]: readonly [number, number]) => Math.min(hi, Math.max(lo, v));
+export { TURN_RANGE, ZOOM_RANGE };
 
 /**
  * Web resolves this file instead of AnatomyCanvas.tsx, so the browser shows the Z-Anatomy body.
@@ -94,6 +107,9 @@ export function AnatomyCanvas({
   const [scroll, setScroll] = useState(0);
   const [slide, setSlide] = useState(0);
   const pinchStart = useRef(zoom);
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  const shiftRef = useRef(false);
   const turnStart = useRef(turn);
   const turnRef = useRef(turn);
   turnRef.current = turn;
@@ -117,6 +133,32 @@ export function AnatomyCanvas({
     null,
   );
   const lockPageScroll = useLockPageScroll();
+  const frameRef = useRef<View>(null);
+  const onZoomRef = useRef(onZoom);
+  onZoomRef.current = onZoom;
+  useEffect(() => {
+    const onWheel = (event: WheelEvent) => {
+      const node = frameRef.current as unknown as HTMLElement | null;
+      const inside = Boolean(node && typeof node.contains === 'function' && node.contains(event.target as Node));
+      if (!wheelChangesZoom(mode, inside)) return;
+      event.preventDefault();
+      onZoomRef.current?.(wheelZoom(zoomRef.current, event.deltaY));
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') shiftRef.current = true;
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') shiftRef.current = false;
+    };
+    window.addEventListener('wheel', onWheel, { passive: false, capture: true });
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('wheel', onWheel, { capture: true });
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, [mode]);
 
   const img = IMAGES[image];
   const box = width ? (imageBox?.(width, height) ?? { left: 0, top: 0, width, height }) : null;
@@ -138,7 +180,7 @@ export function AnatomyCanvas({
     onTouchesUp: (e) => lockPageScroll(e.allTouches.length > e.changedTouches.length),
     onTouchesCancel: () => lockPageScroll(false),
     runOnJS: true,
-    enabled: mode === 'mark',
+    enabled: tapNamesPart(mode),
     onActivate: (e) => {
       if (modelReady && !modelFailed) {
         const part = picker.current?.(e.x, e.y, width, height);
@@ -184,19 +226,24 @@ export function AnatomyCanvas({
     onTouchesUp: (e) => lockPageScroll(e.allTouches.length > e.changedTouches.length),
     onTouchesCancel: () => lockPageScroll(false),
     runOnJS: true,
-    enabled: mode !== 'draw' && mode !== 'view',
+    enabled: oneFingerMovesView(mode),
     minPointers: 1,
     maxPointers: 1,
     minDistance: 8,
     onActivate: () => {
       scrollStart.current = scrollRef.current;
       slideStart.current = slideRef.current;
+      turnStart.current = turnRef.current;
     },
     onUpdate: (e) => {
       if (e.numberOfPointers != null && e.numberOfPointers > 1) return;
-      const gain = Math.max(height * 1.4, 1);
-      setScroll(Math.min(1, Math.max(-1, scrollStart.current + e.translationY / gain)));
-      setSlide(Math.min(1, Math.max(-1, slideStart.current + e.translationX / gain)));
+      if (dragTurns(mode, shiftRef.current)) {
+        onTurn?.(dragTurn(turnStart.current, e.translationX));
+        return;
+      }
+      const next = dragSlide(scrollStart.current, slideStart.current, e.translationX, e.translationY, height);
+      setScroll(next.scroll);
+      setSlide(next.slide);
     },
   });
 
@@ -205,7 +252,7 @@ export function AnatomyCanvas({
     onTouchesUp: (e) => lockPageScroll(e.allTouches.length > e.changedTouches.length),
     onTouchesCancel: () => lockPageScroll(false),
     runOnJS: true,
-    enabled: mode !== 'view',
+    enabled: twoFingerTurns(mode),
     minPointers: 2,
     maxPointers: 2,
     onActivate: () => {
@@ -213,7 +260,7 @@ export function AnatomyCanvas({
     },
     onUpdate: (e) => {
       if (e.numberOfPointers != null && e.numberOfPointers < 2) return;
-      onTurn?.(clamp(turnStart.current - e.translationX / 3, TURN_RANGE));
+      onTurn?.(dragTurn(turnStart.current, e.translationX));
     },
   });
 
@@ -225,7 +272,7 @@ export function AnatomyCanvas({
     onTouchesUp: (e) => lockPageScroll(e.allTouches.length > e.changedTouches.length),
     onTouchesCancel: () => lockPageScroll(false),
     runOnJS: true,
-    enabled: mode !== 'view',
+    enabled: twoFingerTurns(mode),
     onActivate: (e) => {
       pinchStart.current = zoom;
       pinchFocal.current = e.focalX ?? 0;
@@ -233,11 +280,10 @@ export function AnatomyCanvas({
       pinchTurn.current = turnRef.current;
     },
     onUpdate: (e) => {
-      onZoom?.(clamp(pinchStart.current * e.scale, ZOOM_RANGE));
+      onZoom?.(pinchZoom(pinchStart.current, e.scale));
       const dragged = typeof e.focalX === 'number' ? e.focalX - pinchFocal.current : 0;
-      const twisted =
-        typeof e.rotation === 'number' ? ((e.rotation - pinchTwist.current) * 180) / Math.PI : 0;
-      onTurn?.(clamp(pinchTurn.current - dragged / 3 - twisted, TURN_RANGE));
+      const twisted = typeof e.rotation === 'number' ? e.rotation - pinchTwist.current : 0;
+      onTurn?.(turnFromPinch(pinchTurn.current, dragged, twisted));
     },
   });
 
@@ -250,6 +296,11 @@ export function AnatomyCanvas({
 
   return (
     <View
+      ref={(node) => {
+        frameRef.current = node;
+        const el = node as unknown as HTMLElement | null;
+        if (el?.dataset) el.dataset.bodyFrame = '1';
+      }}
       style={[styles.frame, { height, backgroundColor: background, borderRadius: radius }, style]}
       onLayout={onLayout}>
       {modelFailed ? null : (
