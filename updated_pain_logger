@@ -1,0 +1,367 @@
+/*
+  Pain Logger - ESP32-S3 Version (Thermistor + Heartbeat Edition)
+
+  Parts: touch sensor module, active buzzer, MPU-9250 (or MPU-6050), 10k NTC Thermistor,
+         custom optical heartbeat sensor (red LED + photoresistor module + AC coupling cap
+         + 2x PN2222 Darlington amplifier + potentiometer)
+
+  Wiring:
+    - Thermistor Signal   -> GPIO 3 (Analog ADC)
+    - Touch Sensor        -> GPIO 13
+    - Buzzer              -> GPIO 10
+    - MPU SDA             -> GPIO 8 (Physical Pin 18)
+    - MPU SCL             -> GPIO 9 (Physical Pin 46)
+    - Heartbeat amp out   -> GPIO 6 (Analog input, tied collectors of the PN2222 pair)
+    - Heartbeat red LED   -> GPIO 5  (anode; cathode through 220 ohm to GND)
+*/
+
+#include <Wire.h>
+
+// ---------- Pins ----------
+#define THERMISTOR_PIN 3
+#define TOUCH_PIN      13
+#define BUZZER_PIN     10
+#define PULSE_PIN      6   // Heartbeat amplifier output (analog)
+#define PULSE_LED_PIN  5    // Heartbeat red LED (emitter)
+const int sda_pin = 8;
+const int scl_pin = 9;
+
+// ---------- Settings ----------
+const uint8_t  MPU_ADDR      = 0x68;   // Set to 0x69 if AD0 pin is HIGH
+const uint16_t SAMPLE_MS     = 2000;   // Output and sample every 2 seconds
+const uint8_t  BUF_SIZE      = 150;    // 150 entries x 2 s = 5 minutes rolling buffer
+const uint16_t IMU_MS        = 20;     // Read accelerometer ~50 Hz
+const uint16_t LONG_PRESS_MS = 800;    // Hold this long = severe
+const uint16_t TAP_GAP_MS    = 450;    // Wait for double tap
+const uint8_t  STILL_LIMIT   = 5;      // Motion threshold
+
+// ---------- Heartbeat Settings ----------
+const uint16_t PULSE_MS            = 10;    // Read heartbeat signal ~100 Hz
+const uint16_t BEAT_REFRACTORY_MS  = 300;   // Ignore beats closer than this (max ~200 BPM)
+const uint16_t BEAT_MAX_IBI_MS     = 1500;  // Ignore intervals longer than this (min ~40 BPM)
+const uint16_t NO_BEAT_TIMEOUT_MS  = 3000;  // Report 0 BPM if no beat for this long
+const float    MIN_PULSE_AMPL_MV   = 5.0;   // Minimum pulse swing (mV) to count as a beat
+const bool     PULSE_INVERT        = false; // Set true if beats show up as dips instead of peaks
+const uint8_t  IBI_AVG_COUNT       = 4;     // Average the last N beat intervals
+
+// ---------- Thermistor Constants ----------
+const float SERIES_RESISTOR = 10000.0; // 10k ohm fixed resistor
+const float NOMINAL_RESISTANCE = 10000.0; // 10k ohm thermistor nominal
+const float NOMINAL_TEMPERATURE = 25.0; // Room temp reference
+const float B_COEFFICIENT = 3950.0; // Common Beta value for NTC thermistors
+
+struct Sample {
+  int16_t pitch;
+  int16_t roll;
+  uint8_t motion;
+  int8_t  temp;    // Stored Celsius from thermistor
+};
+
+Sample buf[BUF_SIZE];
+uint8_t bufHead = 0;
+uint16_t bufCount = 0;
+
+// Live values
+float curPitch = 0, curRoll = 0;
+float devSum = 0;
+uint16_t devCount = 0;
+int8_t lastTemp = 0;
+uint32_t stillSeconds = 0;
+
+unsigned long lastImu = 0, lastSample = 0, lastPulse = 0;
+
+// Heartbeat state
+float    pulseMv = 0;            // Latest raw amplifier output (mV)
+float    pulseBaseline = 0;      // Slow DC baseline (mV)
+float    pulseEnv = MIN_PULSE_AMPL_MV * 2; // Decaying amplitude envelope (mV)
+bool     pulseBaselineInit = false;
+bool     pulseAboveThr = false;
+unsigned long lastBeatAt = 0;
+uint16_t ibiBuf[IBI_AVG_COUNT];
+uint8_t  ibiCount = 0, ibiHead = 0;
+uint16_t curBpm = 0;             // Current heart rate (BPM), 0 = no valid reading
+
+// Touch state
+bool touchDown = false;
+bool longFired = false;
+unsigned long downAt = 0, lastReleaseAt = 0;
+uint8_t tapCount = 0;
+
+// ---------- Thermistor Helper ----------
+float readThermistorCelsius() {
+  int rawADC = analogRead(THERMISTOR_PIN);
+  if (rawADC == 0) return 0.0;
+
+  // Calculate resistance from 12-bit ADC (0-4095)
+  float resistance = SERIES_RESISTOR / ((4095.0 / (float)rawADC) - 1.0);
+
+  // Steinhart-Hart equation
+  float steinhart;
+  steinhart = resistance / NOMINAL_RESISTANCE;     // (R/Ro)
+  steinhart = log(steinhart);                      // ln(R/Ro)
+  steinhart /= B_COEFFICIENT;                      // 1/B * ln(R/Ro)
+  steinhart += 1.0 / (NOMINAL_TEMPERATURE + 273.15); // + (1/To)
+  steinhart = 1.0 / steinhart;                     // Invert
+  steinhart -= 273.15;                             // Convert to Celsius
+
+  return steinhart;
+}
+
+// ---------- Heartbeat helper ----------
+void updatePulse() {
+  unsigned long now = millis();
+  pulseMv = (float)analogReadMilliVolts(PULSE_PIN);
+
+  if (!pulseBaselineInit) {
+    pulseBaseline = pulseMv;
+    pulseBaselineInit = true;
+  }
+
+  // Slow baseline tracks DC drift; high-pass = what's left is the pulse wave
+  pulseBaseline += 0.01 * (pulseMv - pulseBaseline);
+  float hp = pulseMv - pulseBaseline;
+  if (PULSE_INVERT) hp = -hp;
+
+  // Decaying amplitude envelope so the threshold adapts to signal strength
+  pulseEnv *= 0.995;
+  if (fabs(hp) > pulseEnv) pulseEnv = fabs(hp);
+
+  float thr = pulseEnv * 0.5;
+  if (thr < MIN_PULSE_AMPL_MV) thr = MIN_PULSE_AMPL_MV;
+
+  if (!pulseAboveThr && hp > thr && (now - lastBeatAt) > BEAT_REFRACTORY_MS) {
+    // Beat detected (rising edge through threshold)
+    pulseAboveThr = true;
+    if (lastBeatAt != 0) {
+      unsigned long ibi = now - lastBeatAt;
+      if (ibi <= BEAT_MAX_IBI_MS) {
+        ibiBuf[ibiHead] = (uint16_t)ibi;
+        ibiHead = (ibiHead + 1) % IBI_AVG_COUNT;
+        if (ibiCount < IBI_AVG_COUNT) ibiCount++;
+
+        uint32_t sum = 0;
+        for (uint8_t i = 0; i < ibiCount; i++) sum += ibiBuf[i];
+        float avgIbi = (float)sum / ibiCount;
+        curBpm = (uint16_t)(60000.0 / avgIbi + 0.5);
+      } else {
+        // Gap too long: restart averaging
+        ibiCount = 0;
+        ibiHead = 0;
+      }
+    }
+    lastBeatAt = now;
+  } else if (pulseAboveThr && hp < thr * 0.5) {
+    pulseAboveThr = false;
+  }
+
+  // No beats for a while -> no valid heart rate
+  if (lastBeatAt != 0 && (now - lastBeatAt) > NO_BEAT_TIMEOUT_MS) {
+    curBpm = 0;
+    ibiCount = 0;
+    ibiHead = 0;
+  }
+}
+
+// ---------- MPU helpers ----------
+int16_t read16() {
+  uint8_t hi = Wire.read();
+  uint8_t lo = Wire.read();
+  return (int16_t)((hi << 8) | lo);
+}
+
+bool readAccel(float &ax, float &ay, float &az) {
+  Wire.beginTransmission(MPU_ADDR);
+  Wire.write(0x3B);
+  if (Wire.endTransmission(false) != 0) return false;
+  if (Wire.requestFrom(MPU_ADDR, (uint8_t)6) != 6) return false;
+  int16_t rx = read16();
+  int16_t ry = read16();
+  int16_t rz = read16();
+  ax = rx / 16384.0;
+  ay = ry / 16384.0;
+  az = rz / 16384.0;
+  return true;
+}
+
+// ---------- Buzzer ----------
+void beep(uint16_t onMs, uint16_t offMs) {
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(onMs);
+  digitalWrite(BUZZER_PIN, LOW);
+  delay(offMs);
+}
+
+// ---------- Buffer sampling ----------
+void takeSample() {
+  float t = readThermistorCelsius();
+  if (!isnan(t) && t > -40.0 && t < 150.0) lastTemp = (int8_t)round(t);
+
+  float avgDev = (devCount > 0) ? (devSum / devCount) : 0;
+  float m = avgDev * 100.0;
+  if (m > 255) m = 255;
+  uint8_t motion = (uint8_t)m;
+  devSum = 0;
+  devCount = 0;
+
+  if (motion < STILL_LIMIT) stillSeconds += SAMPLE_MS / 1000;
+  else stillSeconds = 0;
+
+  buf[bufHead].pitch  = (int16_t)curPitch;
+  buf[bufHead].roll   = (int16_t)curRoll;
+  buf[bufHead].motion = motion;
+  buf[bufHead].temp   = lastTemp;
+  bufHead = (bufHead + 1) % BUF_SIZE;
+  if (bufCount < BUF_SIZE) bufCount++;
+  Serial.printf("live,%.1fC,pitch=%d,roll=%d,motion=%u,still=%lus,hr=%uBPM,pulse=%.0fmV\n",
+              t, (int)curPitch, (int)curRoll, motion, (unsigned long)stillSeconds,
+              (unsigned)curBpm, pulseMv);
+}
+
+// ---------- Event logging ----------
+void logEvent(uint8_t severity) {
+  long sumPitch = 0, sumRoll = 0, sumMotion = 0;
+  uint8_t maxMotion = 0;
+  for (uint16_t i = 0; i < bufCount; i++) {
+    sumPitch  += buf[i].pitch;
+    sumRoll   += buf[i].roll;
+    sumMotion += buf[i].motion;
+    if (buf[i].motion > maxMotion) maxMotion = buf[i].motion;
+  }
+  int avgPitch = 0, avgRoll = 0, avgMotion = 0;
+  if (bufCount > 0) {
+    avgPitch  = sumPitch / bufCount;
+    avgRoll   = sumRoll / bufCount;
+    avgMotion = sumMotion / bufCount;
+  }
+
+  // CSV Output format
+  Serial.print(millis() / 1000); Serial.print(',');
+  Serial.print(severity);        Serial.print(',');
+  Serial.print(stillSeconds);    Serial.print(',');
+  Serial.print((int)curPitch);   Serial.print(',');
+  Serial.print((int)curRoll);    Serial.print(',');
+  Serial.print(lastTemp);        Serial.print(',');
+  Serial.print(avgPitch);        Serial.print(',');
+  Serial.print(avgRoll);         Serial.print(',');
+  Serial.print(avgMotion);       Serial.print(',');
+  Serial.print(maxMotion);       Serial.print(',');
+  Serial.print(bufCount);        Serial.print(',');
+  Serial.print(curBpm);          Serial.print(',');
+  Serial.println((int)pulseMv);
+
+  // Confirmation beeps
+  if (severity == 1) {
+    beep(100, 0);
+  } else if (severity == 2) {
+    beep(100, 100);
+    beep(100, 0);
+  } else {
+    beep(600, 0);
+  }
+}
+
+// ---------- Touch handling ----------
+void handleTouch() {
+  bool t = (digitalRead(TOUCH_PIN) == HIGH);
+  unsigned long now = millis();
+
+  if (t && !touchDown) {
+    touchDown = true;
+    downAt = now;
+    longFired = false;
+  } else if (t && touchDown && !longFired && (now - downAt >= LONG_PRESS_MS)) {
+    longFired = true;
+    tapCount = 0;
+    logEvent(3);
+  } else if (!t && touchDown) {
+    touchDown = false;
+    if (!longFired) {
+      tapCount++;
+      lastReleaseAt = now;
+    }
+  }
+
+  if (!touchDown && tapCount > 0 && (now - lastReleaseAt >= TAP_GAP_MS)) {
+    logEvent(tapCount >= 2 ? 2 : 1);
+    tapCount = 0;
+  }
+}
+
+// ---------- Setup / loop ----------
+void setup() {
+  Serial.begin(115200);
+  unsigned long t0 = millis();
+  while (!Serial && millis() - t0 < 3000) delay(10);   // wait for the monitor
+  delay(500);
+
+  Wire.setPins(sda_pin, scl_pin);
+
+  if (!Wire.begin()) {
+    Serial.println(F("Failed to initialize Wire bus"));
+  }
+
+  pinMode(TOUCH_PIN, INPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
+
+  // Heartbeat sensor: red LED stays on as the light emitter
+  pinMode(PULSE_LED_PIN, OUTPUT);
+  digitalWrite(PULSE_LED_PIN, HIGH);
+  pinMode(PULSE_PIN, INPUT);
+
+  // Initialize ADC
+  analogReadResolution(12);
+
+  // Wake the MPU
+  Wire.beginTransmission(MPU_ADDR);
+  Wire.write(0x6B);
+  Wire.write(0x00);
+  if (Wire.endTransmission() != 0) {
+    Serial.println(F("ERROR: MPU not found. Check SDA(GPIO 8)/SCL(GPIO 9)/power."));
+  } else {
+    Wire.beginTransmission(MPU_ADDR);
+    Wire.write(0x75);
+    Wire.endTransmission(false);
+    Wire.requestFrom(MPU_ADDR, (uint8_t)1);
+    uint8_t id = Wire.read();
+    Serial.print(F("MPU WHO_AM_I = 0x"));
+    Serial.println(id, HEX);
+  }
+
+  Serial.println(F("time_s,severity,still_s,pitch,roll,temp_C,pitch_avg5m,roll_avg5m,motion_avg5m,motion_max5m,samples,hr_BPM,pulse_mV"));
+
+  beep(80, 80);
+  beep(80, 0);
+  lastSample = millis();
+}
+
+void loop() {
+  unsigned long now = millis();
+
+  // Fast loop for MPU reading
+  if (now - lastImu >= IMU_MS) {
+    lastImu = now;
+    float ax, ay, az;
+    if (readAccel(ax, ay, az)) {
+      float mag = sqrt(ax * ax + ay * ay + az * az);
+      devSum += fabs(mag - 1.0);
+      devCount++;
+      curPitch = atan2(-ax, sqrt(ay * ay + az * az)) * 180.0 / PI;
+      curRoll  = atan2(ay, az) * 180.0 / PI;
+    }
+  }
+
+  // Heartbeat sensor: ~100 Hz for beat detection
+  if (now - lastPulse >= PULSE_MS) {
+    lastPulse = now;
+    updatePulse();
+  }
+
+  // Slow loop: sample and push data every 2000ms (2 seconds)
+  if (now - lastSample >= SAMPLE_MS) {
+    lastSample = now;
+    takeSample();
+  }
+
+  handleTouch();
+}
