@@ -2,6 +2,7 @@ type Listener = () => void;
 
 let part: string | null = null;
 let drawMode = false;
+let markedLocation: string | null = null;
 const listeners = new Set<Listener>();
 
 function emit() {
@@ -19,6 +20,14 @@ export function getDrawnPart() {
 
 export function getDrawMode() {
   return drawMode;
+}
+
+export function keepMarkedLocation(location: string) {
+  markedLocation = location;
+}
+
+export function getMarkedLocation() {
+  return markedLocation;
 }
 
 /** Light this part. Kept off the symptom mark, so Mark does not inherit it. */

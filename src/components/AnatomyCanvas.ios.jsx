@@ -15,7 +15,7 @@ import SymptomHalo44 from '@/assets/icons/symptom-halo-44.svg';
 import SymptomHalo from '@/assets/icons/symptom-halo.svg';
 import SymptomLocation from '@/assets/icons/symptom-location.svg';
 import { coverRect, FRONT_IMAGE, frontToSaved, SAVED_IMAGE } from '@/lib/anatomy';
-import { clearDrawn, getDrawnPart, selectDrawn, subscribeDraw } from '@/lib/draw-selection';
+import { clearDrawn, getDrawnPart, getMarkedLocation, selectDrawn, subscribeDraw } from '@/lib/draw-selection';
 import { useSomaStore } from '@/store/useSomaStore';
 import { colors } from '@/theme/tokens';
 
@@ -116,7 +116,10 @@ export function AnatomyCanvas({
   const selectPart = (x, y) => {
     if (!(modelReady && !modelFailed)) return;
     const part = picker.current?.(x, y, width, height);
-    if (part) selectDrawn(part);
+    if (part) {
+      selectDrawn(part);
+      useSomaStore.getState().updateDraft({ location: part });
+    }
   };
 
   const tap = useTapGesture({
@@ -337,7 +340,11 @@ export function AnatomyCanvas({
       )}
       {mode === 'draw' ? (
         <View style={styles.resetWrap}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Clear the highlighted area" onPress={clearDrawn} style={styles.resetBtn}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Clear the highlighted area" onPress={() => {
+            clearDrawn();
+            const location = getMarkedLocation();
+            if (location != null) useSomaStore.getState().updateDraft({ location });
+          }} style={styles.resetBtn}>
             <Txt size={13} weight="semibold">Reset</Txt>
           </Pressable>
         </View>

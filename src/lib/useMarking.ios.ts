@@ -1,8 +1,8 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { TURN_RANGE, ZOOM_RANGE } from '@/components/AnatomyCanvas';
 import { describeLocation } from '@/lib/anatomy';
-import { clearDrawn, getDrawnPart, selectDrawn, setDrawMode, subscribeDraw } from '@/lib/draw-selection';
+import { clearDrawn, getDrawnPart, keepMarkedLocation, selectDrawn, setDrawMode, subscribeDraw } from '@/lib/draw-selection';
 import { layerDepth } from '@/lib/format';
 import type { Layer, Point } from '@/lib/types';
 import { useSomaStore } from '@/store/useSomaStore';
@@ -18,6 +18,7 @@ export function useMarking() {
   const [zoom, setZoom] = useState(1);
   const [turn, setTurn] = useState(0);
   const drawnPart = useSyncExternalStore(subscribeDraw, getDrawnPart, getDrawnPart);
+  const markedLocation = useRef<string | null>(null);
 
   useEffect(() => {
     setDrawMode(mode === 'draw');
@@ -49,9 +50,14 @@ export function useMarking() {
     drawnPart,
     mode,
     setMode: (m: 'mark' | 'draw') => {
+      const current = useSomaStore.getState().draft;
+      if (m === 'draw') {
+        markedLocation.current = current.location;
+        keepMarkedLocation(current.location);
+      }
       setMode(m);
       setRotating(false);
-      updateDraft({ strokes: [] });
+      updateDraft(m === 'mark' && markedLocation.current != null ? { strokes: [], location: markedLocation.current } : { strokes: [] });
     },
     rotating,
     toggleRotate: () => setRotating((r) => !r),
@@ -75,11 +81,15 @@ export function useMarking() {
     },
     clearDrawing: () => {
       clearDrawn();
-      updateDraft({ strokes: [], demoArea: false });
+      updateDraft({
+        strokes: [],
+        demoArea: false,
+        ...(markedLocation.current != null ? { location: markedLocation.current } : {}),
+      });
     },
     selectDrawn: (name: string) => {
       selectDrawn(name);
-      updateDraft({ strokes: [] });
+      updateDraft({ strokes: [], location: name });
     },
     marks,
     status,
