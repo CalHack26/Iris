@@ -135,7 +135,7 @@ When configured, the app attempts to sign in at startup, sync pending app record
 - Keep Supabase Edge Function secrets and ESP32 device tokens out of source control. Use the deployment platform's secret storage for server-side keys.
 - The example ESP32 firmware currently disables TLS certificate verification as a hackathon shortcut. Do not use that setting in a production deployment; configure certificate validation first.
 
-## Optional ESP32 wearable
+## ESP32 wearable
 
 The firmware and Supabase ingest function are examples for sending wearable readings and touch events to Supabase.
 
@@ -150,6 +150,12 @@ The example sends readings on a five-second interval and posts a touch event. Th
 ## Privacy and safety
 
 Symptom notes and health-related data are sensitive. Use demo data for development; only connect real data to a backend you control and have configured with appropriate authentication, access policies, retention, and security. This prototype does not promise clinical accuracy or production-grade security.
+
+## 3D model 
+
+The body is adapted from [Z-Anatomy](https://www.z-anatomy.com/) by Gauthier Kervyn and contributors, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Z-Anatomy is based on [BodyParts3D](https://lifesciencedb.jp/bp3d/), Database Center for Life Science, Kousaku Okubo, [CC BY-SA 2.1 Japan](https://creativecommons.org/licenses/by-sa/2.1/jp/).
+
+The meshes in this repo were exported from the Z-Anatomy Blender file. Skin, muscle, organs, and bone are split into head, torso, arms, and legs. Nerves, vessels, and reproductive structures were left out. Those adapted models stay under CC BY-SA 4.0.
 
 ## Useful references
 
