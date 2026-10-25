@@ -11,6 +11,7 @@ Iris is an Expo and React Native mobile prototype for recording symptoms, viewin
 - Browse recent records and severity trends.
 - View daily, weekly, and monthly sensor charts. Seed/demo data is shown when no live readings are configured.
 - Create and share a clinician-oriented PDF summary from marked-pain records.
+- Optionally look up potential disease matches in the Monarch Knowledge Graph from the Report tab.
 - View notifications and wearable data when connected to the optional Supabase backend.
 - Explore the Translate screen, which currently contains a design example and a lightweight keyword-extraction prototype.
 
@@ -150,6 +151,8 @@ The example sends readings on a five-second interval and posts a touch event. Th
 ## Privacy and safety
 
 Symptom notes and health-related data are sensitive. Use demo data for development; only connect real data to a backend you control and have configured with appropriate authentication, access policies, retention, and security. This prototype does not promise clinical accuracy or production-grade security.
+
+The optional Monarch lookup requires an explicit tap and sends up to three generalized body-location terms to Monarch's public API. It does not send symptom notes or personal details. Returned knowledge-graph associations are not diagnoses or estimates of personal risk.
 
 ## 3D model 
 

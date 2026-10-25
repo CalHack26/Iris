@@ -10,6 +10,7 @@ import { Card, Divider } from '@/components/Card';
 import { Metric } from '@/components/Metric';
 import { PageIntro } from '@/components/PageIntro';
 import { PillButton } from '@/components/PillButton';
+import { PotentialConditions } from '@/components/PotentialConditions';
 import { Screen, Section } from '@/components/Screen';
 import { Txt } from '@/components/Txt';
 import { buildReport, reportHtml } from '@/lib/report';
@@ -131,6 +132,7 @@ export default function ClinicianReport() {
                   {report.summary}
                 </Txt>
               </Card>
+              <PotentialConditions records={records} />
             </>
           ) : (
             <Txt size={14} color={colors.muted} lh={1.45}>
@@ -141,8 +143,8 @@ export default function ClinicianReport() {
           <View style={styles.limitations}>
             <Info17 />
             <Txt size={12} color={colors.muted} lh={1.45} style={{ flex: 1 }}>
-              Not a diagnosis or medical assessment. Self-reported logs are incomplete and unverified. No examination, medical
-              test results or external disease comparisons are included.
+              Not a diagnosis or medical assessment. Self-reported logs are incomplete and unverified. No examination or medical
+              test results are included. Optional Monarch matches are knowledge-graph associations, not predictions.
             </Txt>
           </View>
         </Card>
