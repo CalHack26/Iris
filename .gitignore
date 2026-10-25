@@ -41,3 +41,6 @@ example
 # generated native folders
 /ios
 /android
+
+# ESP32 WiFi + device token
+esp32/**/secrets.h

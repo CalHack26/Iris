@@ -153,9 +153,10 @@ export interface RegionTrend {
 
 // ---------- wearable → server ----------
 /**
- * What the ESP32 POSTs to the ingest Edge Function (Sanjit's side).
- * Header: `Authorization: Bearer <device token>`.
+ * What the ESP32 POSTs to the ingest Edge Function (supabase/functions/ingest; sketch in esp32/).
+ * Header: `x-device-token: <device token>`.
  * Send readings in batches; `tap: true` marks a touch-sensor quick-log.
+ * Without `t` / `tap_at` (clock not set) the server uses its own time.
  *
  * {
  *   "readings": [
@@ -166,8 +167,8 @@ export interface RegionTrend {
  * }
  */
 export interface DevicePayload {
-  readings: {
-    t: ISODate;
+  readings?: {
+    t?: ISODate;
     hr?: number;
     skin_c?: number;
     air_c?: number;

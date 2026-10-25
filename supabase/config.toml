@@ -1,0 +1,7 @@
+# Only what this repo needs; the CLI fills in defaults for everything else.
+project_id = "soma"
+
+# The ESP32 has no user login, so the gateway mustn't demand a JWT.
+# ingest checks the x-device-token header itself.
+[functions.ingest]
+verify_jwt = false
